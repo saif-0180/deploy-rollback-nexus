@@ -768,7 +768,7 @@ const FileOperations: React.FC = () => {
                     <div>FT: {selectedDeploymentDetails.ft}</div>
                     <div>File: {selectedDeploymentDetails.file}</div>
                     <div>User: {selectedDeploymentDetails.user}</div>
-                    <div>Target: {selectedDeploymentDetails.targetPath}</div>
+                    <div>Target: {selectedDeploymentDetails.targetPath || selectedDeploymentDetails.target_path || 'N/A'}</div>
                     <div>VMs: {selectedDeploymentDetails.vms ? selectedDeploymentDetails.vms.join(', ') : 'N/A'}</div>
                   </div>
                 </div>
