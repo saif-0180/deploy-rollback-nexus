@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -526,11 +527,6 @@ const FileOperations: React.FC = () => {
     const date = deployment.timestamp ? new Date(deployment.timestamp).toLocaleString() : 'Unknown date';
     const vmCount = deployment.vms ? deployment.vms.length : 0;
     return `${deployment.ft || 'Unknown'}/${deployment.file || 'Unknown'} (${vmCount} VMs) - ${date}`;
-  };
-
-  const formatRefreshInterval = (ms: number): string => {
-    if (ms < 60000) return `${ms / 1000}s`;
-    return `${ms / 60000}m`;
   };
 
   return (
