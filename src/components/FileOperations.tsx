@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { RefreshCcw, ArrowDown } from 'lucide-react';
+import { RefreshCcw } from 'lucide-react';
 import LogDisplay from '@/components/LogDisplay';
 import VMSelector from '@/components/VMSelector';
 
@@ -541,7 +540,7 @@ const FileOperations: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-6">
           {/* File Deployment Section */}
-          <div className="space-y-4 bg-[#EEEEEE] p-4 rounded-md">
+          <div className="space-y-4 bg-[#1a2b42] p-4 rounded-md">
             <h3 className="text-lg font-medium text-[#F79B72]">File Deployment</h3>
 
             <div>
@@ -658,16 +657,16 @@ const FileOperations: React.FC = () => {
             </div>
             
             {/* Enhanced Rollback Section */}
-            <div className="mt-4 pt-4 border-t border-[#2A4759]/30">
+            <div className="mt-4 pt-4 border-t border-[#F79B72]/30">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-md font-medium text-[#F79B72]">Rollback Previous Deployment</h4>
-                <div className="flex items-center space-x-2 text-sm text-[#2A4759]">
+                <div className="flex items-center space-x-2 text-sm text-[#EEEEEE]">
                   <span>({recentFileDeployments.length} available)</span>
                 </div>
               </div>
               
               {/* Auto-refresh controls */}
-              <div className="bg-white/50 p-3 rounded mb-3 space-y-2">
+              <div className="bg-[#2A4759]/50 p-3 rounded mb-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <Checkbox 
@@ -675,16 +674,16 @@ const FileOperations: React.FC = () => {
                       checked={autoRefreshEnabled} 
                       onCheckedChange={(checked) => setAutoRefreshEnabled(checked === true)}
                     />
-                    <Label htmlFor="auto-refresh" className="text-[#2A4759] text-sm">Auto-refresh</Label>
+                    <Label htmlFor="auto-refresh" className="text-[#EEEEEE] text-sm">Auto-refresh</Label>
                     {autoRefreshEnabled && (
-                      <span className="text-xs text-green-600 font-medium">Active</span>
+                      <span className="text-xs text-green-400 font-medium">Active</span>
                     )}
                   </div>
                   <Button 
                     onClick={handleManualRefresh}
                     size="sm"
                     variant="outline"
-                    className="h-7 px-2 border-[#2A4759] text-[#2A4759] hover:bg-[#2A4759] hover:text-white"
+                    className="h-7 px-2 border-[#F79B72] text-[#F79B72] hover:bg-[#F79B72] hover:text-[#2A4759]"
                     disabled={manualRefreshLoading || isLoadingDeployments}
                   >
                     <RefreshCcw className={`h-3 w-3 ${manualRefreshLoading ? 'animate-spin' : ''}`} />
@@ -693,12 +692,12 @@ const FileOperations: React.FC = () => {
                 
                 {autoRefreshEnabled && (
                   <div className="flex items-center space-x-2">
-                    <Label className="text-xs text-[#2A4759]">Interval:</Label>
+                    <Label className="text-xs text-[#EEEEEE]">Interval:</Label>
                     <Select 
                       value={refreshInterval.toString()} 
                       onValueChange={(value) => setRefreshInterval(parseInt(value))}
                     >
-                      <SelectTrigger className="h-6 w-20 text-xs border-[#2A4759]/50">
+                      <SelectTrigger className="h-6 w-20 text-xs border-[#F79B72]/50 bg-[#1a2b42] text-[#EEEEEE]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -712,7 +711,7 @@ const FileOperations: React.FC = () => {
                 )}
                 
                 {lastRefreshTime && (
-                  <div className="text-xs text-[#2A4759]/70">
+                  <div className="text-xs text-[#EEEEEE]/70">
                     Last updated: {lastRefreshTime.toLocaleTimeString()}
                   </div>
                 )}
@@ -720,8 +719,8 @@ const FileOperations: React.FC = () => {
 
               {/* Error state */}
               {isDeploymentsError && (
-                <div className="bg-red-50 border border-red-200 p-2 rounded mb-3">
-                  <div className="text-sm text-red-600">
+                <div className="bg-red-900/20 border border-red-500/50 p-2 rounded mb-3">
+                  <div className="text-sm text-red-400">
                     Failed to load deployments: {deploymentsError instanceof Error ? deploymentsError.message : 'Unknown error'}
                   </div>
                 </div>
@@ -738,7 +737,7 @@ const FileOperations: React.FC = () => {
                   >
                     <SelectTrigger 
                       id="rollback-select" 
-                      className="bg-[#EEEEEE] border-[#2A4759] text-[#2A4759] pr-8"
+                      className="bg-[#1a2b42] border-[#F79B72] text-[#EEEEEE] pr-8"
                     >
                       <SelectValue 
                         placeholder={
@@ -748,28 +747,28 @@ const FileOperations: React.FC = () => {
                               ? "No deployments available" 
                               : "Select a deployment"
                         } 
-                        className="text-[#2A4759]" 
+                        className="text-[#EEEEEE]" 
                       />
                     </SelectTrigger>
-                    <SelectContent className="max-h-40">
+                    <SelectContent className="max-h-40 bg-[#1a2b42] border-[#F79B72]">
                       {recentFileDeployments.map((deployment) => (
-                        <SelectItem key={deployment.id} value={deployment.id} className="text-sm">
+                        <SelectItem key={deployment.id} value={deployment.id} className="text-sm text-[#EEEEEE] hover:bg-[#F79B72] hover:text-[#2A4759]">
                           {formatDeploymentSummary(deployment)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {isLoadingDeployments && (
-                    <RefreshCcw className="absolute right-8 top-1/2 transform -translate-y-1/2 h-3 w-3 animate-spin text-[#2A4759]" />
+                    <RefreshCcw className="absolute right-8 top-1/2 transform -translate-y-1/2 h-3 w-3 animate-spin text-[#F79B72]" />
                   )}
                 </div>
               </div>
 
               {/* Selected deployment details */}
               {selectedDeploymentDetails && (
-                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
-                  <div className="font-medium text-blue-800">Deployment Details:</div>
-                  <div className="text-blue-700">
+                <div className="mt-2 p-2 bg-blue-900/20 border border-blue-500/50 rounded text-xs">
+                  <div className="font-medium text-blue-400">Deployment Details:</div>
+                  <div className="text-blue-300">
                     <div>FT: {selectedDeploymentDetails.ft}</div>
                     <div>File: {selectedDeploymentDetails.file}</div>
                     <div>User: {selectedDeploymentDetails.user}</div>
@@ -781,7 +780,7 @@ const FileOperations: React.FC = () => {
 
               {/* Warning message */}
               {selectedRollbackId && (
-                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+                <div className="mt-2 p-2 bg-amber-900/20 border border-amber-500/50 rounded text-xs text-amber-300">
                   <strong>Warning:</strong> Rolling back will restore the previous version of the file. This action should be used carefully in production environments.
                 </div>
               )}
