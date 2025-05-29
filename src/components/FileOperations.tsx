@@ -533,9 +533,9 @@ const FileOperations: React.FC = () => {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-[#F79B72] mb-4">File Operations</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left Column - Controls */}
-        <div className="space-y-6">
+      <div className="space-y-8">
+        {/* File Operations Section with Side-by-Side Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* File Deployment Card */}
           <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
             <CardHeader>
@@ -796,7 +796,21 @@ const FileOperations: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-          
+
+          {/* File Deployment Logs - Sticky positioning */}
+          <div className="lg:sticky lg:top-4 lg:self-start">
+            <LogDisplay 
+              logs={fileLogs} 
+              height="528px"
+              fixedHeight={true}
+              title="File Deployment Logs"
+              status={fileOperationStatus}
+            />
+          </div>
+        </div>
+
+        {/* Shell Command Section with Side-by-Side Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Shell Command Card */}
           <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
             <CardHeader>
@@ -892,24 +906,12 @@ const FileOperations: React.FC = () => {
               </Button>
             </CardContent>
           </Card>
-        </div>
-        
-        {/* Right Column - Logs Section */}
-        <div className="space-y-6">
-          <div>
-            <LogDisplay 
-              logs={fileLogs} 
-              height="400px"
-              fixedHeight={true}
-              title="File Deployment Logs"
-              status={fileOperationStatus}
-            />
-          </div>
-          
+
+          {/* Shell Command Logs */}
           <div>
             <LogDisplay 
               logs={shellLogs} 
-              height="400px"
+              height="528px"
               fixedHeight={true}
               title="Shell Command Logs"
               status={shellOperationStatus}
