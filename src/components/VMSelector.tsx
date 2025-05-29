@@ -1,87 +1,182 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { useQuery } from '@tanstack/react-query';
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, Check } from "lucide-react";
 
-interface VMSelectorProps {
-  onSelectionChange: (selectedVMs: string[]) => void;
-  selectedVMs: string[];
+export interface VMSelectorProps {
+  onSelectionChange: (vms: string[]) => void;
+  selectedVMs?: string[];
+  selectedTypes?: string[];
 }
 
-const VMSelector: React.FC<VMSelectorProps> = ({ onSelectionChange, selectedVMs }) => {
-  // Fetch available VMs
-  const { data: vms = [], isLoading } = useQuery({
+const VMSelector: React.FC<VMSelectorProps> = ({ 
+  onSelectionChange, 
+  selectedVMs = [], 
+  selectedTypes = [] 
+}) => {
+  const [selectedVMList, setSelectedVMList] = useState<string[]>(selectedVMs);
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Fetch VMs from API
+  const { data: vmsData = [], isLoading } = useQuery({
     queryKey: ['vms'],
     queryFn: async () => {
-      const response = await fetch('/api/vms');
-      if (!response.ok) {
-        throw new Error('Failed to fetch VMs');
+      try {
+        const response = await fetch('/api/vms');
+        if (!response.ok) {
+          console.error('Error fetching VMs:', await response.text());
+          throw new Error('Failed to fetch VMs');
+        }
+        const data = await response.json();
+        console.log('Loaded VMs from API:', data);
+        return data || [];
+      } catch (error) {
+        console.error('Error fetching VMs:', error);
+        return [];
       }
-      return response.json();
     },
     refetchOnWindowFocus: false,
   });
 
-  const handleVMToggle = (vm: string, checked: boolean) => {
-    let newSelection;
-    if (checked) {
-      newSelection = [...selectedVMs, vm];
-    } else {
-      newSelection = selectedVMs.filter(v => v !== vm);
+  useEffect(() => {
+    if (JSON.stringify(selectedVMs) !== JSON.stringify(selectedVMList)) {
+      setSelectedVMList(selectedVMs);
     }
-    onSelectionChange(newSelection);
+  }, [selectedVMs]);
+
+  const handleVMChange = (vmName: string, checked: boolean) => {
+    const updatedSelection = checked
+      ? [...selectedVMList, vmName]
+      : selectedVMList.filter(vm => vm !== vmName);
+    
+    setSelectedVMList(updatedSelection);
+    onSelectionChange(updatedSelection);
   };
 
   const handleSelectAll = () => {
-    onSelectionChange(vms);
+    const allVMNames = vmsData.map((vm: any) => vm.name);
+    setSelectedVMList(allVMNames);
+    onSelectionChange(allVMNames);
   };
 
   const handleDeselectAll = () => {
+    setSelectedVMList([]);
     onSelectionChange([]);
   };
 
   if (isLoading) {
-    return <div className="text-[#2A4759]">Loading VMs...</div>;
+    return <div className="text-[#EEEEEE]">Loading VM list...</div>;
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex space-x-2 mb-2">
-        <button
-          type="button"
-          onClick={handleSelectAll}
-          className="text-xs px-2 py-1 bg-[#F79B72] text-[#2A4759] rounded hover:bg-[#F79B72]/80"
+    <div className="space-y-3">
+      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button 
+            variant="outline" 
+            className="w-full justify-between bg-[#2A4759] border-[#F79B72] text-[#EEEEEE] hover:bg-[#2A4759]/80"
+          >
+            <span>
+              {selectedVMList.length === 0 
+                ? "Select VMs" 
+                : `${selectedVMList.length} VM${selectedVMList.length !== 1 ? 's' : ''} selected`
+              }
+            </span>
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        
+        <DropdownMenuContent 
+          className="w-80 max-h-80 overflow-hidden bg-white border border-[#2A4759]/20 shadow-lg"
+          align="start"
         >
-          Select All
-        </button>
-        <button
-          type="button"
-          onClick={handleDeselectAll}
-          className="text-xs px-2 py-1 bg-[#2A4759] text-white rounded hover:bg-[#2A4759]/80"
-        >
-          Deselect All
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto bg-white/50 p-2 rounded border border-[#2A4759]/20">
-        {vms.map((vm: string) => (
-          <div key={vm} className="flex items-center space-x-2">
-            <Checkbox
-              id={`vm-${vm}`}
-              checked={selectedVMs.includes(vm)}
-              onCheckedChange={(checked) => handleVMToggle(vm, checked === true)}
-            />
-            <Label htmlFor={`vm-${vm}`} className="text-sm text-[#2A4759]">
-              {vm}
-            </Label>
+          {/* Select All / Deselect All buttons */}
+          <div className="flex gap-2 p-2 border-b border-[#2A4759]/20">
+            <Button
+              type="button"
+              onClick={handleSelectAll}
+              size="sm"
+              className="flex-1 bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80 text-xs"
+            >
+              Select All
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDeselectAll}
+              size="sm"
+              variant="outline"
+              className="flex-1 border-[#2A4759] text-[#2A4759] hover:bg-[#2A4759]/10 text-xs"
+            >
+              Deselect All
+            </Button>
           </div>
-        ))}
-      </div>
-      
-      {selectedVMs.length > 0 && (
-        <div className="text-sm text-[#2A4759]">
-          Selected: {selectedVMs.length} VM{selectedVMs.length !== 1 ? 's' : ''}
+
+          {/* Scrollable VM list */}
+          <div className="max-h-60 overflow-y-auto p-2">
+            {vmsData.length === 0 ? (
+              <p className="text-sm text-gray-500 p-2">No VMs available in inventory.</p>
+            ) : (
+              <div className="space-y-2">
+                {vmsData.map((vm: any) => (
+                  <div 
+                    key={vm.name} 
+                    className="flex items-center space-x-3 p-2 rounded hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleVMChange(vm.name, !selectedVMList.includes(vm.name))}
+                  >
+                    <Checkbox 
+                      id={`vm-${vm.name}`}
+                      checked={selectedVMList.includes(vm.name)}
+                      onCheckedChange={(checked) => handleVMChange(vm.name, checked === true)}
+                      className="pointer-events-none"
+                    />
+                    <Label 
+                      htmlFor={`vm-${vm.name}`} 
+                      className="text-[#2A4759] cursor-pointer flex-1 pointer-events-none"
+                    >
+                      {vm.name}
+                      {vm.type && <span className="text-xs text-gray-500 ml-2">({vm.type})</span>}
+                    </Label>
+                    {selectedVMList.includes(vm.name) && (
+                      <Check className="h-4 w-4 text-[#F79B72]" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Selected VMs Display */}
+      {selectedVMList.length > 0 && (
+        <div className="bg-[#2A4759]/20 rounded-md p-3 border border-[#F79B72]/30">
+          <div className="text-sm font-medium text-[#2A4759] mb-2">
+            Selected VMs ({selectedVMList.length}):
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {selectedVMList.map((vmName) => (
+              <span 
+                key={vmName}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-[#F79B72] text-[#2A4759] text-xs rounded-md"
+              >
+                {vmName}
+                <button
+                  onClick={() => handleVMChange(vmName, false)}
+                  className="hover:bg-[#2A4759]/20 rounded-full p-0.5"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>
