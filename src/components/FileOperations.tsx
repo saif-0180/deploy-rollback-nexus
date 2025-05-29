@@ -801,7 +801,7 @@ const FileOperations: React.FC = () => {
           <div className="lg:sticky lg:top-4 lg:self-start">
             <LogDisplay 
               logs={fileLogs} 
-              height="528px"
+              height="838px"
               fixedHeight={true}
               title="File Deployment Logs"
               status={fileOperationStatus}

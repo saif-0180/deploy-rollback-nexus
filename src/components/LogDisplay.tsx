@@ -1,6 +1,7 @@
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface LogDisplayProps {
   logs: string[];
@@ -17,6 +18,18 @@ const LogDisplay: React.FC<LogDisplayProps> = ({
   title = "Logs",
   status = 'idle'
 }) => {
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new logs are added
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const scrollElement = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollElement) {
+        scrollElement.scrollTop = scrollElement.scrollHeight;
+      }
+    }
+  }, [logs]);
+
   const getStatusColor = () => {
     switch (status) {
       case 'loading':
@@ -59,20 +72,24 @@ const LogDisplay: React.FC<LogDisplayProps> = ({
       </div>
       <div 
         className={cn(
-          "bg-black text-green-400 p-4 rounded font-mono text-sm overflow-y-auto",
+          "bg-black rounded",
           fixedHeight && "resize-none"
         )}
         style={{ height }}
       >
-        {logs.length === 0 ? (
-          <div className="text-gray-500">No logs yet...</div>
-        ) : (
-          logs.map((log, index) => (
-            <div key={index} className="mb-1">
-              {log}
-            </div>
-          ))
-        )}
+        <ScrollArea ref={scrollAreaRef} className="h-full w-full">
+          <div className="text-green-400 p-4 font-mono text-sm">
+            {logs.length === 0 ? (
+              <div className="text-gray-500">No logs yet...</div>
+            ) : (
+              logs.map((log, index) => (
+                <div key={index} className="mb-1">
+                  {log}
+                </div>
+              ))
+            )}
+          </div>
+        </ScrollArea>
       </div>
     </div>
   );
