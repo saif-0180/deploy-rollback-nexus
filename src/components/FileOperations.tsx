@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -406,7 +405,7 @@ const FileOperations: React.FC = () => {
         
         if (pollCount > 120) {
           console.log('Operation timed out after 2 minutes');
-          statusSetter(data.status === 'running' ? 'running' : 'completed');
+          statusSetter('running' || 'completed');
           clearInterval(pollInterval);
         }
       } catch (error) {
@@ -538,7 +537,7 @@ const FileOperations: React.FC = () => {
         {/* Left Column - Controls */}
         <div className="space-y-6">
           {/* File Deployment Card */}
-          <Card className="bg-[#1a2b42] text-[#EEEEEE]">
+          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
             <CardHeader>
               <CardTitle className="text-[#F79B72]">File Deployment</CardTitle>
             </CardHeader>
@@ -799,7 +798,7 @@ const FileOperations: React.FC = () => {
           </Card>
           
           {/* Shell Command Card */}
-          <Card className="bg-[#1a2b42] text-[#EEEEEE]">
+          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
             <CardHeader>
               <CardTitle className="text-[#F79B72]">Shell Command</CardTitle>
             </CardHeader>
