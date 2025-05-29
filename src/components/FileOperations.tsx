@@ -405,7 +405,7 @@ const FileOperations: React.FC = () => {
         
         if (pollCount > 120) {
           console.log('Operation timed out after 2 minutes');
-          statusSetter('running' || 'completed');
+          statusSetter('completed');
           clearInterval(pollInterval);
         }
       } catch (error) {
