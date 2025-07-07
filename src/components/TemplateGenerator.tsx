@@ -18,13 +18,13 @@ interface TemplateGeneratorProps {
 }
 
 const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerated }) => {
-  const [ftNumber, setFtNumber] = useState('');
   const [selectedFt, setSelectedFt] = useState<string>("");
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
-  const [selectedFile, setSelectedFile] = useState<string>("");
   const [selectedVMs, setSelectedVMs] = useState<string[]>([]);
   const [selectedDbConnection, setSelectedDbConnection] = useState('');
   const [selectedDbUser, setSelectedDbUser] = useState('');
+  const [selectedTargetUser, setSelectedTargetUser] = useState('');
+  const [selectedService, setSelectedService] = useState('');
   const [instructions, setInstructions] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedTemplate, setGeneratedTemplate] = useState<any>(null);
@@ -34,52 +34,32 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   const { toast } = useToast();
 
   // Fetch FT numbers
-  const { data: fts = [] } = useQuery({
-      queryKey: ['fts'],
-      queryFn: async () => {
-        const response = await fetch('/api/fts');
-        if (!response.ok) {
-          throw new Error('Failed to fetch FTs');
-        }
-        return response.json();
-      },
-      refetchOnWindowFocus: false,
-    });
-  
-    // Fetch files for selected FT
-    const { data: files = [] } = useQuery({
-      queryKey: ['files', selectedFt],
-      queryFn: async () => {
-        if (!selectedFt) return [];
-        const response = await fetch(`/api/fts/${selectedFt}/files`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch files');
-        }
-        return response.json();
-      },
-      enabled: !!selectedFt,
-      refetchOnWindowFocus: false,
-    });
-  // const { data: ftNumbers = [], isLoading: isLoadingFts } = useQuery({
-  //   queryKey: ['ft-numbers'],
-  //   queryFn: async () => {
-  //     const response = await fetch('/api/fts');
-  //     if (!response.ok) throw new Error('Failed to fetch FT numbers');
-  //     return response.json();
-  //   },
-  // });
+  const { data: fts = [], isLoading: isLoadingFts } = useQuery({
+    queryKey: ['fts'],
+    queryFn: async () => {
+      const response = await fetch('/api/fts');
+      if (!response.ok) {
+        throw new Error('Failed to fetch FTs');
+      }
+      return response.json();
+    },
+    refetchOnWindowFocus: false,
+  });
 
-  // // Fetch files for selected FT
-  // const { data: ftFiles = [], isLoading: isLoadingFiles } = useQuery({
-  //   queryKey: ['ft-files', ftNumber],
-  //   queryFn: async () => {
-  //     if (!ftNumber) return [];
-  //     const response = await fetch(`/api/fts/<ft>/files`);
-  //     if (!response.ok) throw new Error('Failed to fetch FT files');
-  //     return response.json();
-  //   },
-  //   enabled: !!ftNumber,
-  // });
+  // Fetch files for selected FT
+  const { data: files = [] } = useQuery({
+    queryKey: ['files', selectedFt],
+    queryFn: async () => {
+      if (!selectedFt) return [];
+      const response = await fetch(`/api/fts/${selectedFt}/files`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch files');
+      }
+      return response.json();
+    },
+    enabled: !!selectedFt,
+    refetchOnWindowFocus: false,
+  });
 
   // Fetch database connections
   const { data: dbConnections = [], isLoading: isLoadingDbConnections } = useQuery({
@@ -111,6 +91,16 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
     },
   });
 
+  // Fetch target users from inventory
+  const { data: targetUsers = [], isLoading: isLoadingUsers } = useQuery({
+    queryKey: ['target-users'],
+    queryFn: async () => {
+      const response = await fetch('/api/users');
+      if (!response.ok) throw new Error('Failed to fetch users');
+      return response.json();
+    },
+  });
+
   const addLog = (message: string) => {
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
   };
@@ -132,9 +122,9 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         steps.push({
           type: 'file_deployment',
           description: trimmed,
-          files: fileMatch || [],
+          files: fileMatch || selectedFiles,
           targetPath: pathMatch?.[1] || '/home/users/abpwrk1/pbin/app',
-          targetUser: userMatch?.[1] || 'abpwrk1',
+          targetUser: userMatch?.[1] || selectedTargetUser || 'abpwrk1',
           targetVMs: vmMatch ? [vmMatch[1]] : selectedVMs,
           order: steps.length + 1
         });
@@ -161,7 +151,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         steps.push({
           type: 'service_restart',
           description: trimmed,
-          service: serviceMatch?.[1] || 'docker.service',
+          service: serviceMatch?.[1] || selectedService || 'docker.service',
           targetVMs: selectedVMs,
           order: steps.length + 1
         });
@@ -198,7 +188,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   };
 
   const generateTemplate = async () => {
-    if (!ftNumber || !instructions) {
+    if (!selectedFt || !instructions) {
       toast({
         title: "Error",
         description: "Please provide FT number and instructions",
@@ -209,7 +199,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
 
     setIsGenerating(true);
     setLogs([]);
-    addLog(`Starting template generation for ${ftNumber}`);
+    addLog(`Starting template generation for ${selectedFt}`);
     
     try {
       addLog("Parsing deployment instructions...");
@@ -218,13 +208,15 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
 
       const template = {
         metadata: {
-          ft_number: ftNumber,
+          ft_number: selectedFt,
           generated_at: new Date().toISOString(),
-          description: `Deployment template for ${ftNumber}`,
+          description: `Deployment template for ${selectedFt}`,
           selectedFiles: selectedFiles,
           selectedVMs: selectedVMs,
           dbConnection: selectedDbConnection,
-          dbUser: selectedDbUser
+          dbUser: selectedDbUser,
+          targetUser: selectedTargetUser,
+          service: selectedService
         },
         steps: steps,
         dependencies: steps.map((step, index) => ({
@@ -238,10 +230,10 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
       setGeneratedTemplate(template);
       setEditableTemplate(JSON.stringify(template, null, 2));
       
-      onTemplateGenerated?.(ftNumber, template);
+      onTemplateGenerated?.(selectedFt, template);
       toast({
         title: "Success",
-        description: `Template for ${ftNumber} generated successfully`,
+        description: `Template for ${selectedFt} generated successfully`,
       });
 
     } catch (error) {
@@ -272,7 +264,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ft_number: ftNumber,
+          ft_number: selectedFt,
           template: templateToSave
         }),
       });
@@ -281,7 +273,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         addLog("Template saved successfully");
         toast({
           title: "Success",
-          description: `Template for ${ftNumber} saved successfully`,
+          description: `Template for ${selectedFt} saved successfully`,
         });
         setIsEditing(false);
       } else {
@@ -320,12 +312,12 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
               {/* FT Number Selection */}
               <div>
                 <Label htmlFor="ft-select" className="text-[#F79B72]">Select FT Number</Label>
-                <Select value={ftNumber} onValueChange={setFtNumber}>
+                <Select value={selectedFt} onValueChange={setSelectedFt}>
                   <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
                     <SelectValue placeholder={isLoadingFts ? "Loading..." : "Select FT"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {ftNumbers.map((ft: string) => (
+                    {fts.map((ft: string) => (
                       <SelectItem key={ft} value={ft}>{ft}</SelectItem>
                     ))}
                   </SelectContent>
@@ -333,24 +325,20 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
               </div>
 
               {/* File Selection */}
-              {ftNumber && (
+              {selectedFt && (
                 <div>
                   <Label className="text-[#F79B72]">Select Files</Label>
                   <div className="max-h-32 overflow-y-auto bg-[#2A4759] rounded-md p-2 space-y-2">
-                    {isLoadingFiles ? (
-                      <div className="text-[#EEEEEE]">Loading files...</div>
-                    ) : (
-                      ftFiles.map((file: string) => (
-                        <div key={file} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`file-${file}`}
-                            checked={selectedFiles.includes(file)}
-                            onCheckedChange={(checked) => handleFileSelection(file, checked === true)}
-                          />
-                          <Label htmlFor={`file-${file}`} className="text-[#EEEEEE] text-sm">{file}</Label>
-                        </div>
-                      ))
-                    )}
+                    {files.map((file: string) => (
+                      <div key={file} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`file-${file}`}
+                          checked={selectedFiles.includes(file)}
+                          onCheckedChange={(checked) => handleFileSelection(file, checked === true)}
+                        />
+                        <Label htmlFor={`file-${file}`} className="text-[#EEEEEE] text-sm">{file}</Label>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -362,6 +350,36 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                   onSelectionChange={setSelectedVMs}
                   selectedVMs={selectedVMs}
                 />
+              </div>
+
+              {/* Target User Selection */}
+              <div>
+                <Label htmlFor="target-user" className="text-[#F79B72]">Target User</Label>
+                <Select value={selectedTargetUser} onValueChange={setSelectedTargetUser}>
+                  <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                    <SelectValue placeholder={isLoadingUsers ? "Loading..." : "Select Target User"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {targetUsers.map((user: string) => (
+                      <SelectItem key={user} value={user}>{user}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Service Selection */}
+              <div>
+                <Label htmlFor="service-select" className="text-[#F79B72]">Select Service (Optional)</Label>
+                <Select value={selectedService} onValueChange={setSelectedService}>
+                  <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                    <SelectValue placeholder={isLoadingServices ? "Loading..." : "Select Service"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {systemdServices.map((service: string) => (
+                      <SelectItem key={service} value={service}>{service}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Database Connection */}

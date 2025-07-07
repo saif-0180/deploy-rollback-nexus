@@ -21,6 +21,12 @@ interface DeploymentTemplate {
     ft_number: string;
     generated_at: string;
     description: string;
+    selectedFiles?: string[];
+    selectedVMs?: string[];
+    dbConnection?: string;
+    dbUser?: string;
+    targetUser?: string;
+    service?: string;
   };
   steps: DeploymentStep[];
   dependencies: Array<{
@@ -118,7 +124,7 @@ const DeployUsingTemplate: React.FC = () => {
     queryFn: async () => {
       if (!deploymentId) return { logs: [], status: 'idle' };
       
-      const response = await fetch(`/api/deploy/${deploymentId}/logs`);
+      const response = await fetch(`/api/deploy/template/${deploymentId}/logs`);
       if (!response.ok) {
         throw new Error('Failed to fetch deployment logs');
       }
@@ -201,6 +207,12 @@ const DeployUsingTemplate: React.FC = () => {
                     <div>FT: {loadedTemplate.metadata.ft_number}</div>
                     <div>Steps: {loadedTemplate.steps.length}</div>
                     <div>Generated: {new Date(loadedTemplate.metadata.generated_at).toLocaleString()}</div>
+                    {loadedTemplate.metadata.selectedVMs && (
+                      <div>VMs: {loadedTemplate.metadata.selectedVMs.join(', ')}</div>
+                    )}
+                    {loadedTemplate.metadata.targetUser && (
+                      <div>Target User: {loadedTemplate.metadata.targetUser}</div>
+                    )}
                   </div>
                 </div>
               )}
@@ -238,7 +250,7 @@ const DeployUsingTemplate: React.FC = () => {
         <div className="xl:col-span-1">
           <LogDisplay
             logs={logs}
-            height="600px"
+            height="838px"
             fixedHeight={true}
             title="Template Deployment Logs"
             status={deploymentStatus}
