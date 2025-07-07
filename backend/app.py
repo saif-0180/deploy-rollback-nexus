@@ -30,7 +30,7 @@ app = Flask(__name__, static_folder='../frontend/dist')
 # Register the blueprint
 app.register_blueprint(db_routes)
 app.register_blueprint(auth_bp)
-app.register_blueprint(template_routes)
+app.register_blueprint(template_bp)
 #app.register_blueprint(db_routes)
 
 # Directory where fix files are stored
