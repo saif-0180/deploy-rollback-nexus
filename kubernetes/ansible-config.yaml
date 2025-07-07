@@ -1,0 +1,30 @@
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ansible-config
+data:
+  ansible.cfg: |
+    [defaults]
+    host_key_checking = False
+    timeout = 30
+    inventory = /app/inventory/inventory.ini
+    remote_user = infadm
+    log_path = /app/logs/ansible.log
+    become = True
+    become_method = sudo
+    become_user = infadm
+    private_key_file = /root/.ssh/id_rsa
+    control_path_dir = /tmp/ansible-ssh
+    forks = 10
+    yaml_valid_extensions = .yaml, .yml, .json
+    
+    [privilege_escalation]
+    become = True
+    become_method = sudo
+    become_user = infadm
+    
+    [ssh_connection]
+    pipelining = True
+    control_path = /tmp/ansible-ssh/%%h-%%p-%%r
+    ssh_args = -o ControlMaster=auto -o ControlPersist=60s -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null

@@ -1,0 +1,38 @@
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inventory-config
+data:
+  inventory.ini: |
+    [batch]
+    batch1 ansible_host=192.168.1.10
+    batch2 ansible_host=192.168.1.11
+    
+    [imdg]
+    imdg1 ansible_host=192.168.1.20
+    imdg2 ansible_host=192.168.1.21
+    
+    [airflow]
+    airflow ansible_host=192.168.1.30
+    
+    [all:vars]
+    ansible_user=infadm
+    ansible_ssh_private_key_file=/root/.ssh/id_rsa
+    ansible_become=yes
+    ansible_become_method=sudo
+    ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlMaster=auto -o ControlPath=/tmp/ansible-ssh/%h-%p-%r -o ControlPersist=60s'
+    
+  inventory.json: |
+    {
+      "vms": [
+        {"name": "batch1", "type": "batch", "ip": "192.168.1.10"},
+        {"name": "batch2", "type": "batch", "ip": "192.168.1.11"},
+        {"name": "imdg1", "type": "imdg", "ip": "192.168.1.20"},
+        {"name": "imdg2", "type": "imdg", "ip": "192.168.1.21"},
+        {"name": "airflow", "type": "airflow", "ip": "192.168.1.30"}
+      ],
+      "users": ["infadm", "abpwrk1", "root"],
+      "db_users": ["postgres", "dbadmin"],
+      "systemd_services": ["hazelcast", "kafka", "zookeeper", "airflow-scheduler", "docker.service"]
+    }

@@ -1,0 +1,32 @@
+
+Add this to app.py:
+
+1. Import the db_routes Blueprint:
+```python
+from routes.db_routes import db_routes
+```
+
+2. Register the Blueprint:
+```python
+app.register_blueprint(db_routes)
+```
+
+Make sure to place these after the other imports and registrations in app.py.
+
+Additionally, make sure your app.py has the following function which is used by db_routes.py:
+
+```python
+# Helper function to log message to deployment log
+def log_message(deployment_id, message):
+    """Log a message to the deployment logs and the application log"""
+    if deployment_id in deployments:
+        # Add to deployment logs
+        if "logs" not in deployments[deployment_id]:
+            deployments[deployment_id]["logs"] = []
+        deployments[deployment_id]["logs"].append(message)
+        
+        # Also log to application log
+        logger.debug(f"[{deployment_id}] {message}")
+```
+
+This function should already exist in your app.py file. If not, add it too.

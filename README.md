@@ -1,73 +1,134 @@
-# Welcome to your Lovable project
 
-## Project info
+# Fix Deployment Orchestrator
 
-**URL**: https://lovable.dev/projects/6c7e7ddb-e9ec-4835-95c0-df53ae5bb18a
+A web-based tool for managing and deploying fixes across multiple virtual machines. This tool helps automate file deployments, SQL updates, and systemd service management with a user-friendly interface.
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- **File Operations**: Copy, move, and backup files across multiple VMs
+- **SQL Operations**: Execute SQL files on databases
+- **Systemctl Operations**: Manage systemd services (start, stop, restart, status)
+- **Deployment History**: Track all deployment operations with logs
+- **Real-time Logging**: View deployment progress in real-time
 
-**Use Lovable**
+## Architecture
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/6c7e7ddb-e9ec-4835-95c0-df53ae5bb18a) and start prompting.
+- **Frontend**: React with Tailwind CSS
+- **Backend**: Flask Python API
+- **Orchestration**: Ansible for automated deployment tasks
+- **Container**: Docker & Kubernetes ready
 
-Changes made via Lovable will be committed automatically to this repo.
+## Prerequisites
 
-**Use your preferred IDE**
+- Node.js 16+ and npm for frontend development
+- Python 3.9+ for backend development
+- Ansible for deployment orchestration
+- Docker and Kubernetes for containerized deployment
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Directory Structure
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```
+fix-files/
+├── AllFts/
+│   ├── ft-1977/
+│   │   └── gimdg_classes.jar
+│   ├── ft-1978/
+│   │   └── config.sql
+│   └── ft-1979/
+│       └── ADJ1_IMDG_refresh.sh
+```
 
-Follow these steps:
+## Local Development
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Frontend
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+```bash
+# Install dependencies
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Backend
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-**Use GitHub Codespaces**
+# Install dependencies
+pip install -r backend/requirements.txt
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+# Start Flask server
+python backend/app.py
+```
 
-## What technologies are used for this project?
+## Deployment with Docker
 
-This project is built with:
+```bash
+# Build Docker image
+docker build -t fix-deployment-orchestrator .
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+# Run container
+docker run -p 5000:5000 -v /path/to/fixfiles:/app/fixfiles fix-deployment-orchestrator
+```
 
-## How can I deploy this project?
+## Kubernetes Deployment
 
-Simply open [Lovable](https://lovable.dev/projects/6c7e7ddb-e9ec-4835-95c0-df53ae5bb18a) and click on Share -> Publish.
+See the [Kubernetes README](kubernetes/README.md) for detailed instructions.
 
-## Can I connect a custom domain to my Lovable project?
+## Configuration
 
-Yes, you can!
+### Inventory Setup
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+The application uses an inventory file to manage VMs, users, and services. You can configure this through the UI or by editing the inventory.json file:
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+```json
+{
+  "vms": [
+    {"name": "batch1", "type": "batch", "ip": "192.168.1.10"},
+    {"name": "batch2", "type": "batch", "ip": "192.168.1.11"},
+    {"name": "imdg1", "type": "imdg", "ip": "192.168.1.20"}
+  ],
+  "users": ["infadm", "abpwrk1"],
+  "db_users": ["postgres", "dbadmin"],
+  "systemd_services": ["hazelcast", "kafka", "zookeeper"]
+}
+```
+
+## Best Practices
+
+1. **Security Considerations**:
+   - Use SSH keys instead of passwords
+   - Implement role-based access control
+   - Encrypt sensitive data (passwords, etc.)
+
+2. **Backup Strategy**:
+   - Always backup files before deployment
+   - Keep a history of SQL operations
+   - Create snapshots of critical VMs before significant changes
+
+3. **Testing**:
+   - Test deployments in a staging environment first
+   - Create validation steps for critical deployments
+   - Set up automated tests for deployment processes
+
+4. **Monitoring**:
+   - Monitor service health post-deployment
+   - Set up alerts for failed deployments
+   - Track deployment metrics over time
+
+## Future Enhancements
+
+1. User authentication and multi-user support
+2. Role-based access control
+3. Scheduled deployments
+4. Automated testing integration
+5. Enhanced monitoring and alerting
+6. Rollback capabilities for failed deployments
+7. Custom deployment templates
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

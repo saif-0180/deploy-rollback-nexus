@@ -1,0 +1,79 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fix-deployment-orchestrator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fix-deployment-orchestrator
+  template:
+    metadata:
+      labels:
+        app: fix-deployment-orchestrator
+    spec:
+      containers:
+        - name: fix-deployment-orchestrator
+          image: fix-deployment-orchestrator:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: ANSIBLE_HOST_KEY_CHECKING
+              value: "false"
+            - name: LOG_FILE_PATH
+              value: "/app/logs/application.log"
+            - name: DEPLOYMENT_LOGS_DIR
+              value: "/app/logs"
+            - name: ANSIBLE_CONFIG
+              value: "/etc/ansible/ansible.cfg"
+            - name: ANSIBLE_SSH_CONTROL_PATH_DIR
+              value: "/tmp/ansible-ssh"
+            - name: ANSIBLE_SSH_CONTROL_PATH
+              value: "/tmp/ansible-ssh/%h-%p-%r"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: fix-files-volume
+              mountPath: /app/fixfiles
+            - name: ssh-keys-volume
+              mountPath: /app/ssh-keys
+            - name: ansible-config-volume
+              mountPath: /etc/ansible
+            - name: inventory-volume
+              mountPath: /app/inventory
+            - name: app-logs-volume
+              mountPath: /app/logs
+            - name: ansible-tmp-volume
+              mountPath: /tmp/ansible-ssh
+              
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: true
+          
+          # Use our custom entrypoint script
+          command:
+            - "/entrypoint.sh"
+          args:
+            - "python"
+            - "backend/app.py"
+
+      volumes:
+        - name: fix-files-volume
+          persistentVolumeClaim:
+            claimName: fix-files-pvc
+        - name: ssh-keys-volume
+          persistentVolumeClaim:
+            claimName: ssh-keys-pvc
+        - name: ansible-config-volume
+          configMap:
+            name: ansible-config
+        - name: inventory-volume
+          configMap:
+            name: inventory-config
+        - name: app-logs-volume
+          persistentVolumeClaim:
+            claimName: app-logs-pvc
+        - name: ansible-tmp-volume
+          emptyDir:
+            medium: Memory

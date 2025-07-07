@@ -1,0 +1,29 @@
+
+# Reference only - DO NOT apply this directly
+# Replace base64-encoded values with actual keys
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ssh-keys
+type: Opaque
+data:
+  # These are placeholders - replace with your actual base64 encoded keys
+  id_rsa: base64EncodedPrivateKey==
+  id_rsa.pub: base64EncodedPublicKey==
+  config: |
+    Host batch1
+      HostName 192.168.1.10
+      User infadm
+      IdentityFile ~/.ssh/id_rsa
+      StrictHostKeyChecking no
+    
+    Host batch2
+      HostName 192.168.1.11
+      User infadm
+      IdentityFile ~/.ssh/id_rsa
+      StrictHostKeyChecking no
+    
+    Host imdg*
+      User infadm
+      IdentityFile ~/.ssh/id_rsa
+      StrictHostKeyChecking no

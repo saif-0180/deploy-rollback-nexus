@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -98,4 +99,27 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Custom styles for dropdown elements */
+.select-content {
+  @apply bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30;
+}
+
+.select-item {
+  @apply text-[#EEEEEE] hover:bg-[#3a5769];
+}
+
+/* Style for VM selector items */
+.vm-item {
+  @apply bg-[#2A4759] text-[#EEEEEE] p-2 rounded-md;
+}
+
+/* Make sure dropdowns are always visible with proper contrast */
+[data-radix-popper-content-wrapper] {
+  @apply z-50;
+}
+
+.dropdown-content {
+  @apply bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30;
 }
