@@ -34,7 +34,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
       // File operations
       if (trimmed.includes('copy') || trimmed.includes('deploy') || trimmed.includes('file')) {
         const fileMatch = trimmed.match(/(\d+)\s+file[s]?/i);
-        const serverMatch = trimmed.match/(\d+)\s+server[s]?/i);
+        const serverMatch = trimmed.match(/(\d+)\s+server[s]?/i);
         
         steps.push({
           type: 'file_deployment',
