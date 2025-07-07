@@ -32,26 +32,52 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   const { toast } = useToast();
 
   // Fetch FT numbers
-  const { data: ftNumbers = [], isLoading: isLoadingFts } = useQuery({
-    queryKey: ['ft-numbers'],
-    queryFn: async () => {
-      const response = await fetch('/api/fts');
-      if (!response.ok) throw new Error('Failed to fetch FT numbers');
-      return response.json();
-    },
-  });
+  const { data: fts = [] } = useQuery({
+      queryKey: ['fts'],
+      queryFn: async () => {
+        const response = await fetch('/api/fts');
+        if (!response.ok) {
+          throw new Error('Failed to fetch FTs');
+        }
+        return response.json();
+      },
+      refetchOnWindowFocus: false,
+    });
+  
+    // Fetch files for selected FT
+    const { data: files = [] } = useQuery({
+      queryKey: ['files', selectedFt],
+      queryFn: async () => {
+        if (!selectedFt) return [];
+        const response = await fetch(`/api/fts/${selectedFt}/files`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch files');
+        }
+        return response.json();
+      },
+      enabled: !!selectedFt,
+      refetchOnWindowFocus: false,
+    });
+  // const { data: ftNumbers = [], isLoading: isLoadingFts } = useQuery({
+  //   queryKey: ['ft-numbers'],
+  //   queryFn: async () => {
+  //     const response = await fetch('/api/fts');
+  //     if (!response.ok) throw new Error('Failed to fetch FT numbers');
+  //     return response.json();
+  //   },
+  // });
 
-  // Fetch files for selected FT
-  const { data: ftFiles = [], isLoading: isLoadingFiles } = useQuery({
-    queryKey: ['ft-files', ftNumber],
-    queryFn: async () => {
-      if (!ftNumber) return [];
-      const response = await fetch(`/api/fts/<ft>/files`);
-      if (!response.ok) throw new Error('Failed to fetch FT files');
-      return response.json();
-    },
-    enabled: !!ftNumber,
-  });
+  // // Fetch files for selected FT
+  // const { data: ftFiles = [], isLoading: isLoadingFiles } = useQuery({
+  //   queryKey: ['ft-files', ftNumber],
+  //   queryFn: async () => {
+  //     if (!ftNumber) return [];
+  //     const response = await fetch(`/api/fts/<ft>/files`);
+  //     if (!response.ok) throw new Error('Failed to fetch FT files');
+  //     return response.json();
+  //   },
+  //   enabled: !!ftNumber,
+  // });
 
   // Fetch database connections
   const { data: dbConnections = [], isLoading: isLoadingDbConnections } = useQuery({
