@@ -19,7 +19,9 @@ interface TemplateGeneratorProps {
 
 const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerated }) => {
   const [ftNumber, setFtNumber] = useState('');
+  const [selectedFt, setSelectedFt] = useState<string>("");
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [selectedFile, setSelectedFile] = useState<string>("");
   const [selectedVMs, setSelectedVMs] = useState<string[]>([]);
   const [selectedDbConnection, setSelectedDbConnection] = useState('');
   const [selectedDbUser, setSelectedDbUser] = useState('');
