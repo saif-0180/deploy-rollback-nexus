@@ -35,7 +35,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   const { data: ftNumbers = [], isLoading: isLoadingFts } = useQuery({
     queryKey: ['ft-numbers'],
     queryFn: async () => {
-      const response = await fetch('/api/ft-numbers');
+      const response = await fetch('/api/fts');
       if (!response.ok) throw new Error('Failed to fetch FT numbers');
       return response.json();
     },
@@ -46,7 +46,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
     queryKey: ['ft-files', ftNumber],
     queryFn: async () => {
       if (!ftNumber) return [];
-      const response = await fetch(`/api/ft-files/${ftNumber}`);
+      const response = await fetch(`/api/fts/<ft>/files`);
       if (!response.ok) throw new Error('Failed to fetch FT files');
       return response.json();
     },
