@@ -9,9 +9,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { Trash2, Plus, Edit3 } from "lucide-react";
 import VMSelector from './VMSelector';
 import DatabaseConnectionSelector from './DatabaseConnectionSelector';
 import LogDisplay from './LogDisplay';
+
+interface DeploymentStep {
+  id: string;
+  order: number;
+  type: string;
+  description: string;
+  ftNumber: string;
+  selectedFiles: string[];
+  selectedVMs: string[];
+  targetUser: string;
+  targetPath: string;
+  dbConnection: string;
+  dbUser: string;
+  service: string;
+  [key: string]: any;
+}
 
 interface TemplateGeneratorProps {
   onTemplateGenerated?: (ftNumber: string, template: any) => void;
@@ -19,50 +36,53 @@ interface TemplateGeneratorProps {
 
 const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerated }) => {
   const [selectedFt, setSelectedFt] = useState<string>("");
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
-  const [selectedVMs, setSelectedVMs] = useState<string[]>([]);
-  const [selectedDbConnection, setSelectedDbConnection] = useState('');
-  const [selectedDbUser, setSelectedDbUser] = useState('');
-  const [selectedTargetUser, setSelectedTargetUser] = useState('');
-  const [selectedService, setSelectedService] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [steps, setSteps] = useState<DeploymentStep[]>([]);
+  const [currentStep, setCurrentStep] = useState<DeploymentStep | null>(null);
+  const [isEditingStep, setIsEditingStep] = useState(false);
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [generatedTemplate, setGeneratedTemplate] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editableTemplate, setEditableTemplate] = useState<string>('');
   const [logs, setLogs] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+
+  // Step form state
+  const [stepType, setStepType] = useState('');
+  const [stepDescription, setStepDescription] = useState('');
+  const [stepFt, setStepFt] = useState('');
+  const [stepFiles, setStepFiles] = useState<string[]>([]);
+  const [stepVMs, setStepVMs] = useState<string[]>([]);
+  const [stepTargetUser, setStepTargetUser] = useState('');
+  const [stepTargetPath, setStepTargetPath] = useState('/home/users/abpwrk1/pbin/app');
+  const [stepDbConnection, setStepDbConnection] = useState('');
+  const [stepDbUser, setStepDbUser] = useState('');
+  const [stepService, setStepService] = useState('');
 
   // Fetch FT numbers
   const { data: fts = [], isLoading: isLoadingFts } = useQuery({
     queryKey: ['fts'],
     queryFn: async () => {
       const response = await fetch('/api/fts');
-      if (!response.ok) {
-        throw new Error('Failed to fetch FTs');
-      }
+      if (!response.ok) throw new Error('Failed to fetch FTs');
       return response.json();
     },
-    refetchOnWindowFocus: false,
   });
 
-  // Fetch files for selected FT
-  const { data: files = [] } = useQuery({
-    queryKey: ['files', selectedFt],
+  // Fetch files for step FT
+  const { data: stepFtFiles = [] } = useQuery({
+    queryKey: ['files', stepFt],
     queryFn: async () => {
-      if (!selectedFt) return [];
-      const response = await fetch(`/api/fts/${selectedFt}/files`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch files');
-      }
+      if (!stepFt) return [];
+      const response = await fetch(`/api/fts/${stepFt}/files`);
+      if (!response.ok) throw new Error('Failed to fetch files');
       return response.json();
     },
-    enabled: !!selectedFt,
-    refetchOnWindowFocus: false,
+    enabled: !!stepFt,
   });
 
   // Fetch database connections
-  const { data: dbConnections = [], isLoading: isLoadingDbConnections } = useQuery({
+  const { data: dbConnections = [] } = useQuery({
     queryKey: ['db-connections'],
     queryFn: async () => {
       const response = await fetch('/api/db-connections');
@@ -72,7 +92,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   });
 
   // Fetch database users
-  const { data: dbUsers = [], isLoading: isLoadingDbUsers } = useQuery({
+  const { data: dbUsers = [] } = useQuery({
     queryKey: ['db-users'],
     queryFn: async () => {
       const response = await fetch('/api/db-users');
@@ -82,7 +102,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   });
 
   // Fetch systemd services
-  const { data: systemdServices = [], isLoading: isLoadingServices } = useQuery({
+  const { data: systemdServices = [] } = useQuery({
     queryKey: ['systemd-services'],
     queryFn: async () => {
       const response = await fetch('/api/systemd-services');
@@ -92,7 +112,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   });
 
   // Fetch target users from inventory
-  const { data: targetUsers = [], isLoading: isLoadingUsers } = useQuery({
+  const { data: targetUsers = [] } = useQuery({
     queryKey: ['target-users'],
     queryFn: async () => {
       const response = await fetch('/api/users');
@@ -105,120 +125,140 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
   };
 
-  const parseInstructions = (text: string) => {
-    const steps = [];
-    const lines = text.split('\n').filter(line => line.trim());
-    
-    for (const line of lines) {
-      const trimmed = line.trim();
-      
-      // File operations
-      if (trimmed.includes('copy') || trimmed.includes('deploy') || trimmed.includes('file')) {
-        const fileMatch = trimmed.match(/(\w+\.\w+)/g);
-        const pathMatch = trimmed.match(/path\s+([^\s]+)/i);
-        const userMatch = trimmed.match(/user\s+(\w+)/i);
-        const vmMatch = trimmed.match(/to\s+(\w+)/i);
-        
-        steps.push({
-          type: 'file_deployment',
-          description: trimmed,
-          files: fileMatch || selectedFiles,
-          targetPath: pathMatch?.[1] || '/home/users/abpwrk1/pbin/app',
-          targetUser: userMatch?.[1] || selectedTargetUser || 'abpwrk1',
-          targetVMs: vmMatch ? [vmMatch[1]] : selectedVMs,
-          order: steps.length + 1
-        });
-      }
-      
-      // SQL operations
-      else if (trimmed.includes('sql') || trimmed.includes('query') || trimmed.includes('database')) {
-        const sqlFileMatch = trimmed.match(/(\w+\.sql)/i);
-        
-        steps.push({
-          type: 'sql_deployment',
-          description: trimmed,
-          sqlFile: sqlFileMatch?.[1] || 'query.sql',
-          dbConnection: selectedDbConnection,
-          dbUser: selectedDbUser,
-          order: steps.length + 1
-        });
-      }
-      
-      // Service operations
-      else if (trimmed.includes('restart') || trimmed.includes('service')) {
-        const serviceMatch = trimmed.match(/restart\s+([^\s]+)/i);
-        
-        steps.push({
-          type: 'service_restart',
-          description: trimmed,
-          service: serviceMatch?.[1] || selectedService || 'docker.service',
-          targetVMs: selectedVMs,
-          order: steps.length + 1
-        });
-      }
-      
-      // Playbook operations
-      else if (trimmed.includes('playbook') || trimmed.includes('ansible')) {
-        const playbookMatch = trimmed.match(/playbook\s+([^\s]+)/i);
-        
-        steps.push({
-          type: 'ansible_playbook',
-          description: trimmed,
-          playbook: playbookMatch?.[1] || 'playbook.yml',
-          targetVMs: selectedVMs,
-          order: steps.length + 1
-        });
-      }
-      
-      // Helm operations
-      else if (trimmed.includes('helm')) {
-        const chartMatch = trimmed.match(/upgrade\s+([^\s]+)/i);
-        
-        steps.push({
-          type: 'helm_upgrade',
-          description: trimmed,
-          chart: chartMatch?.[1] || 'chart',
-          targetVMs: selectedVMs,
-          order: steps.length + 1
-        });
-      }
-    }
-    
-    return steps;
+  const resetStepForm = () => {
+    setStepType('');
+    setStepDescription('');
+    setStepFt('');
+    setStepFiles([]);
+    setStepVMs([]);
+    setStepTargetUser('');
+    setStepTargetPath('/home/users/abpwrk1/pbin/app');
+    setStepDbConnection('');
+    setStepDbUser('');
+    setStepService('');
   };
 
-  const generateTemplate = async () => {
-    if (!selectedFt || !instructions) {
+  const handleStepFileSelection = (fileName: string, checked: boolean) => {
+    setStepFiles(prev => 
+      checked 
+        ? [...prev, fileName]
+        : prev.filter(f => f !== fileName)
+    );
+  };
+
+  const addStep = () => {
+    if (!stepType || !stepDescription) {
       toast({
         title: "Error",
-        description: "Please provide FT number and instructions",
+        description: "Please provide step type and description",
         variant: "destructive",
       });
       return;
     }
 
-    setIsGenerating(true);
-    setLogs([]);
+    const newStep: DeploymentStep = {
+      id: `step_${Date.now()}`,
+      order: steps.length + 1,
+      type: stepType,
+      description: stepDescription,
+      ftNumber: stepFt,
+      selectedFiles: [...stepFiles],
+      selectedVMs: [...stepVMs],
+      targetUser: stepTargetUser,
+      targetPath: stepTargetPath,
+      dbConnection: stepDbConnection,
+      dbUser: stepDbUser,
+      service: stepService
+    };
+
+    setSteps(prev => [...prev, newStep]);
+    resetStepForm();
+    addLog(`Added step ${newStep.order}: ${newStep.description}`);
+  };
+
+  const editStep = (step: DeploymentStep) => {
+    setStepType(step.type);
+    setStepDescription(step.description);
+    setStepFt(step.ftNumber);
+    setStepFiles([...step.selectedFiles]);
+    setStepVMs([...step.selectedVMs]);
+    setStepTargetUser(step.targetUser);
+    setStepTargetPath(step.targetPath);
+    setStepDbConnection(step.dbConnection);
+    setStepDbUser(step.dbUser);
+    setStepService(step.service);
+    setEditingStepId(step.id);
+    setIsEditingStep(true);
+  };
+
+  const updateStep = () => {
+    if (!editingStepId) return;
+
+    setSteps(prev => prev.map(step => 
+      step.id === editingStepId 
+        ? {
+            ...step,
+            type: stepType,
+            description: stepDescription,
+            ftNumber: stepFt,
+            selectedFiles: [...stepFiles],
+            selectedVMs: [...stepVMs],
+            targetUser: stepTargetUser,
+            targetPath: stepTargetPath,
+            dbConnection: stepDbConnection,
+            dbUser: stepDbUser,
+            service: stepService
+          }
+        : step
+    ));
+
+    setIsEditingStep(false);
+    setEditingStepId(null);
+    resetStepForm();
+    addLog(`Updated step`);
+  };
+
+  const removeStep = (stepId: string) => {
+    setSteps(prev => {
+      const filtered = prev.filter(step => step.id !== stepId);
+      return filtered.map((step, index) => ({ ...step, order: index + 1 }));
+    });
+    addLog(`Removed step`);
+  };
+
+  const generateTemplate = async () => {
+    if (!selectedFt || steps.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select FT number and add at least one step",
+        variant: "destructive",
+      });
+      return;
+    }
+
     addLog(`Starting template generation for ${selectedFt}`);
     
     try {
-      addLog("Parsing deployment instructions...");
-      const steps = parseInstructions(instructions);
-      addLog(`Identified ${steps.length} deployment steps`);
-
       const template = {
         metadata: {
           ft_number: selectedFt,
           generated_at: new Date().toISOString(),
           description: `Deployment template for ${selectedFt}`,
-          selectedFiles: selectedFiles,
-          selectedVMs: selectedVMs,
-          dbConnection: selectedDbConnection,
-          dbUser: selectedDbUser,
-          targetUser: selectedTargetUser,
-          service: selectedService
+          total_steps: steps.length
         },
-        steps: steps,
+        steps: steps.map(step => ({
+          type: step.type,
+          description: step.description,
+          order: step.order,
+          ftNumber: step.ftNumber,
+          files: step.selectedFiles,
+          targetPath: step.targetPath,
+          targetUser: step.targetUser,
+          targetVMs: step.selectedVMs,
+          ...(step.dbConnection && { dbConnection: step.dbConnection }),
+          ...(step.dbUser && { dbUser: step.dbUser }),
+          ...(step.service && { service: step.service })
+        })),
         dependencies: steps.map((step, index) => ({
           step: index + 1,
           depends_on: index > 0 ? [index] : [],
@@ -243,14 +283,13 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         description: "Failed to generate template",
         variant: "destructive",
       });
-    } finally {
-      setIsGenerating(false);
     }
   };
 
   const saveTemplate = async () => {
     if (!generatedTemplate) return;
 
+    setIsSaving(true);
     try {
       let templateToSave = generatedTemplate;
       
@@ -286,15 +325,9 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         description: "Failed to save template",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
-  };
-
-  const handleFileSelection = (fileName: string, checked: boolean) => {
-    setSelectedFiles(prev => 
-      checked 
-        ? [...prev, fileName]
-        : prev.filter(f => f !== fileName)
-    );
   };
 
   return (
@@ -304,14 +337,14 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Left Column - Form */}
         <div className="space-y-6">
+          {/* Main FT Selection */}
           <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
             <CardHeader>
               <CardTitle className="text-[#F79B72]">Template Configuration</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* FT Number Selection */}
               <div>
-                <Label htmlFor="ft-select" className="text-[#F79B72]">Select FT Number</Label>
+                <Label htmlFor="main-ft-select" className="text-[#F79B72]">Select FT Number for Template</Label>
                 <Select value={selectedFt} onValueChange={setSelectedFt}>
                   <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
                     <SelectValue placeholder={isLoadingFts ? "Loading..." : "Select FT"} />
@@ -323,95 +356,215 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                   </SelectContent>
                 </Select>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* File Selection */}
-              {selectedFt && (
-                <div>
-                  <Label className="text-[#F79B72]">Select Files</Label>
-                  <div className="max-h-32 overflow-y-auto bg-[#2A4759] rounded-md p-2 space-y-2">
-                    {files.map((file: string) => (
-                      <div key={file} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`file-${file}`}
-                          checked={selectedFiles.includes(file)}
-                          onCheckedChange={(checked) => handleFileSelection(file, checked === true)}
-                        />
-                        <Label htmlFor={`file-${file}`} className="text-[#EEEEEE] text-sm">{file}</Label>
+          {/* Steps Management */}
+          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
+            <CardHeader>
+              <CardTitle className="text-[#F79B72]">Deployment Steps</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Current Steps List */}
+              {steps.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-[#F79B72]">Current Steps:</Label>
+                  {steps.map((step) => (
+                    <div key={step.id} className="flex items-center justify-between bg-[#2A4759]/50 p-3 rounded-md">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">Step {step.order}: {step.type}</div>
+                        <div className="text-xs text-[#EEEEEE]/70">{step.description}</div>
+                        {step.ftNumber && <div className="text-xs text-[#F79B72]">FT: {step.ftNumber}</div>}
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => editStep(step)}
+                          className="border-[#F79B72] text-[#F79B72] hover:bg-[#F79B72]/10"
+                        >
+                          <Edit3 size={14} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => removeStep(step.id)}
+                          className="border-red-500 text-red-500 hover:bg-red-500/10"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
-              {/* VM Selection */}
-              <div>
-                <Label className="text-[#F79B72]">Select VMs</Label>
-                <VMSelector
-                  onSelectionChange={setSelectedVMs}
-                  selectedVMs={selectedVMs}
-                />
-              </div>
+              {/* Step Form */}
+              <div className="border-t border-[#EEEEEE]/20 pt-4 space-y-4">
+                <Label className="text-[#F79B72]">
+                  {isEditingStep ? 'Edit Step' : 'Add New Step'}
+                </Label>
 
-              {/* Target User Selection */}
-              <div>
-                <Label htmlFor="target-user" className="text-[#F79B72]">Target User</Label>
-                <Select value={selectedTargetUser} onValueChange={setSelectedTargetUser}>
-                  <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
-                    <SelectValue placeholder={isLoadingUsers ? "Loading..." : "Select Target User"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {targetUsers.map((user: string) => (
-                      <SelectItem key={user} value={user}>{user}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Step Type */}
+                <div>
+                  <Label className="text-[#F79B72]">Step Type</Label>
+                  <Select value={stepType} onValueChange={setStepType}>
+                    <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                      <SelectValue placeholder="Select step type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="file_deployment">File Deployment</SelectItem>
+                      <SelectItem value="sql_deployment">SQL Deployment</SelectItem>
+                      <SelectItem value="service_restart">Service Restart</SelectItem>
+                      <SelectItem value="ansible_playbook">Ansible Playbook</SelectItem>
+                      <SelectItem value="helm_upgrade">Helm Upgrade</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* Service Selection */}
-              <div>
-                <Label htmlFor="service-select" className="text-[#F79B72]">Select Service (Optional)</Label>
-                <Select value={selectedService} onValueChange={setSelectedService}>
-                  <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
-                    <SelectValue placeholder={isLoadingServices ? "Loading..." : "Select Service"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {systemdServices.map((service: string) => (
-                      <SelectItem key={service} value={service}>{service}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Step Description */}
+                <div>
+                  <Label className="text-[#F79B72]">Step Description</Label>
+                  <Input
+                    value={stepDescription}
+                    onChange={(e) => setStepDescription(e.target.value)}
+                    placeholder="Describe what this step does"
+                    className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30"
+                  />
+                </div>
 
-              {/* Database Connection */}
-              <div>
-                <Label className="text-[#F79B72]">Database Connection (Optional)</Label>
-                <DatabaseConnectionSelector
-                  onConnectionChange={setSelectedDbConnection}
-                  onUserChange={setSelectedDbUser}
-                  selectedConnection={selectedDbConnection}
-                  selectedUser={selectedDbUser}
-                />
-              </div>
+                {/* Step FT Selection */}
+                <div>
+                  <Label className="text-[#F79B72]">Step FT Number</Label>
+                  <Select value={stepFt} onValueChange={setStepFt}>
+                    <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                      <SelectValue placeholder="Select FT for this step" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fts.map((ft: string) => (
+                        <SelectItem key={ft} value={ft}>{ft}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* Instructions */}
-              <div>
-                <Label htmlFor="instructions" className="text-[#F79B72]">Deployment Instructions</Label>
-                <Textarea
-                  id="instructions"
-                  value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
-                  placeholder="Example: copy file1 to batch1 path /home/users/abpwrk1/pbin/app user abpwrk1, then restart docker.service, then copy file2 to batch2 and imdg1 path /home/users/abpwrk1/pbin/app, then run playbook playbook1.yaml"
-                  className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 min-h-[150px]"
-                  rows={8}
-                />
+                {/* File Selection for current step FT */}
+                {stepFt && stepType === 'file_deployment' && (
+                  <div>
+                    <Label className="text-[#F79B72]">Select Files from {stepFt}</Label>
+                    <div className="max-h-32 overflow-y-auto bg-[#2A4759] rounded-md p-2 space-y-2">
+                      {stepFtFiles.map((file: string) => (
+                        <div key={file} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`step-file-${file}`}
+                            checked={stepFiles.includes(file)}
+                            onCheckedChange={(checked) => handleStepFileSelection(file, checked === true)}
+                          />
+                          <Label htmlFor={`step-file-${file}`} className="text-[#EEEEEE] text-sm">{file}</Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* VM Selection */}
+                <div>
+                  <Label className="text-[#F79B72]">Select VMs</Label>
+                  <VMSelector
+                    onSelectionChange={setStepVMs}
+                    selectedVMs={stepVMs}
+                  />
+                </div>
+
+                {/* Target User Selection */}
+                {stepType === 'file_deployment' && (
+                  <>
+                    <div>
+                      <Label className="text-[#F79B72]">Target User</Label>
+                      <Select value={stepTargetUser} onValueChange={setStepTargetUser}>
+                        <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                          <SelectValue placeholder="Select Target User" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {targetUsers.map((user: string) => (
+                            <SelectItem key={user} value={user}>{user}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label className="text-[#F79B72]">Target Path</Label>
+                      <Input
+                        value={stepTargetPath}
+                        onChange={(e) => setStepTargetPath(e.target.value)}
+                        placeholder="/home/users/abpwrk1/pbin/app"
+                        className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Service Selection */}
+                {stepType === 'service_restart' && (
+                  <div>
+                    <Label className="text-[#F79B72]">Select Service</Label>
+                    <Select value={stepService} onValueChange={setStepService}>
+                      <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                        <SelectValue placeholder="Select Service" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {systemdServices.map((service: string) => (
+                          <SelectItem key={service} value={service}>{service}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Database Connection */}
+                {stepType === 'sql_deployment' && (
+                  <div>
+                    <Label className="text-[#F79B72]">Database Connection</Label>
+                    <DatabaseConnectionSelector
+                      onConnectionChange={setStepDbConnection}
+                      onUserChange={setStepDbUser}
+                      selectedConnection={stepDbConnection}
+                      selectedUser={stepDbUser}
+                    />
+                  </div>
+                )}
+
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={isEditingStep ? updateStep : addStep}
+                    className="bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
+                  >
+                    <Plus size={16} className="mr-2" />
+                    {isEditingStep ? 'Update Step' : 'Add Step'}
+                  </Button>
+                  {isEditingStep && (
+                    <Button
+                      onClick={() => {
+                        setIsEditingStep(false);
+                        setEditingStepId(null);
+                        resetStepForm();
+                      }}
+                      variant="outline"
+                      className="border-[#EEEEEE]/30 text-[#EEEEEE]"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <Button
                 onClick={generateTemplate}
-                disabled={isGenerating}
+                disabled={!selectedFt || steps.length === 0}
                 className="w-full bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
               >
-                {isGenerating ? "Generating Template..." : "Generate Template"}
+                Generate Template
               </Button>
             </CardContent>
           </Card>
@@ -433,10 +586,11 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                     </Button>
                     <Button
                       onClick={saveTemplate}
+                      disabled={isSaving}
                       size="sm"
                       className="bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
                     >
-                      Save Template
+                      {isSaving ? "Saving..." : "Save Template"}
                     </Button>
                   </div>
                 </CardTitle>
@@ -466,7 +620,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
             height="838px"
             fixedHeight={true}
             title="Template Generation Logs"
-            status={isGenerating ? 'running' : 'idle'}
+            status="idle"
           />
         </div>
       </div>

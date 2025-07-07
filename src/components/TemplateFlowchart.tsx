@@ -6,6 +6,14 @@ interface DeploymentStep {
   type: string;
   description: string;
   order: number;
+  ftNumber?: string;
+  files?: string[];
+  targetVMs?: string[];
+  targetUser?: string;
+  targetPath?: string;
+  service?: string;
+  dbConnection?: string;
+  dbUser?: string;
   [key: string]: any;
 }
 
@@ -14,6 +22,7 @@ interface DeploymentTemplate {
     ft_number: string;
     generated_at: string;
     description: string;
+    total_steps?: number;
   };
   steps: DeploymentStep[];
   dependencies: Array<{
@@ -74,6 +83,9 @@ const TemplateFlowchart: React.FC<TemplateFlowchartProps> = ({ template }) => {
     <div className="space-y-4 max-h-[500px] overflow-y-auto">
       <div className="text-sm text-[#EEEEEE]/70 mb-4">
         Deployment flow for {template.metadata.ft_number}
+        {template.metadata.total_steps && (
+          <span className="ml-2 text-[#F79B72]">({template.metadata.total_steps} steps)</span>
+        )}
       </div>
       
       {template.steps.map((step, index) => (
@@ -108,23 +120,49 @@ const TemplateFlowchart: React.FC<TemplateFlowchartProps> = ({ template }) => {
                 
                 {/* Step-specific details */}
                 <div className="text-xs text-[#EEEEEE]/60 space-y-1">
+                  {step.ftNumber && (
+                    <div className="text-[#F79B72]">FT: {step.ftNumber}</div>
+                  )}
+                  
                   {step.type === 'file_deployment' && (
                     <>
-                      {step.fileCount && <div>Files: {step.fileCount}</div>}
-                      {step.serverCount && <div>Servers: {step.serverCount}</div>}
+                      {step.files && step.files.length > 0 && (
+                        <div>Files: {step.files.join(', ')}</div>
+                      )}
+                      {step.targetVMs && step.targetVMs.length > 0 && (
+                        <div>Target VMs: {step.targetVMs.join(', ')}</div>
+                      )}
+                      {step.targetUser && (
+                        <div>Target User: {step.targetUser}</div>
+                      )}
+                      {step.targetPath && (
+                        <div>Target Path: {step.targetPath}</div>
+                      )}
                     </>
                   )}
+                  
                   {step.type === 'ansible_playbook' && step.playbook && (
                     <div>Playbook: {step.playbook}</div>
                   )}
-                  {step.type === 'service_restart' && step.service && (
-                    <div>Service: {step.service}</div>
+                  
+                  {step.type === 'service_restart' && (
+                    <>
+                      {step.service && <div>Service: {step.service}</div>}
+                      {step.targetVMs && step.targetVMs.length > 0 && (
+                        <div>Target VMs: {step.targetVMs.join(', ')}</div>
+                      )}
+                    </>
                   )}
+                  
                   {step.type === 'helm_upgrade' && step.chart && (
                     <div>Chart: {step.chart}</div>
                   )}
-                  {step.type === 'sql_deployment' && step.database && (
-                    <div>Database: {step.database}</div>
+                  
+                  {step.type === 'sql_deployment' && (
+                    <>
+                      {step.dbConnection && <div>DB Connection: {step.dbConnection}</div>}
+                      {step.dbUser && <div>DB User: {step.dbUser}</div>}
+                    </>
                   )}
                 </div>
               </div>
