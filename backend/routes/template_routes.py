@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 import subprocess
 import logging
+import base64
 
 template_bp = Blueprint('template', __name__)
 
@@ -30,56 +31,75 @@ def execute_deployment_step(step, deployment_id, ft_number, orchestration_user='
             target_path = step.get('targetPath', '/home/users/abpwrk1/pbin/app')
             target_user = step.get('targetUser', 'abpwrk1')
             target_vms = step.get('targetVMs', [])
+            ft_number = step.get('ftNumber', '')
             
             for vm in target_vms:
                 for file in files:
-                    # Simulate file copy (replace with actual implementation)
-                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Copying {file} to {vm}:{target_path}")
+                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Copying {file} from FT {ft_number} to {vm}:{target_path} as {target_user}")
                     # Add your actual file copy logic here
                     time.sleep(2)  # Simulate processing time
                     deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully copied {file} to {vm}")
         
         elif step_type == 'sql_deployment':
             # Execute SQL deployment
-            sql_file = step.get('sqlFile', 'query.sql')
+            files = step.get('files', [])
             db_connection = step.get('dbConnection')
             db_user = step.get('dbUser')
+            db_name = step.get('dbName')
+            db_password_encoded = step.get('dbPassword', '')
             
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Executing SQL file: {sql_file}")
-            # Add your actual SQL execution logic here
-            time.sleep(3)  # Simulate processing time
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully executed SQL file: {sql_file}")
+            # Decode base64 password
+            db_password = base64.b64decode(db_password_encoded).decode('utf-8') if db_password_encoded else ''
+            
+            for sql_file in files:
+                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Executing SQL file: {sql_file} on {db_connection}")
+                # Add your actual SQL execution logic here
+                time.sleep(3)  # Simulate processing time
+                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully executed SQL file: {sql_file}")
         
         elif step_type == 'service_restart':
             # Execute service restart
             service = step.get('service', 'docker.service')
+            operation = step.get('operation', 'restart')
             target_vms = step.get('targetVMs', [])
             
             for vm in target_vms:
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Restarting {service} on {vm}")
-                # Add your actual service restart logic here
+                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Performing {operation} on {service} on {vm}")
+                # Add your actual service operation logic here
                 time.sleep(2)  # Simulate processing time
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully restarted {service} on {vm}")
+                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully performed {operation} on {service} on {vm}")
         
         elif step_type == 'ansible_playbook':
             # Execute Ansible playbook
-            playbook = step.get('playbook', 'playbook.yml')
-            target_vms = step.get('targetVMs', [])
+            playbook = step.get('playbook', '')
             
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Running playbook: {playbook}")
+            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Running Ansible playbook: {playbook}")
+            
+            # Construct the ansible-playbook command
+            cmd = f"""ansible-playbook /opt/amdocs/infadm/rm-acd/playbooks/TC1/install_playbooks/{playbook} \
+                -i /home/users/infadm/rm-acd/generated_inventory.ini -f 10 \
+                -e env_type=K8S \
+                -e@/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_common.yml \
+                -e@/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_topology.yml \
+                -e@/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_encrypted.yml \
+                -e@/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_topology_k8s.yml \
+                -e@/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_encrypted_k8s.yml \
+                -e@/home/users/infadm/workspace/TC_CD_PIPELINE1@2/../git_area/VM07/cd-input/silent_properties/ABP1_silentProperties_fco.yml \
+                -e@/home/users/infadm/workspace/TC_CD_PIPELINE1@2/../git_area/VM07/cd-input/silent_properties/ABP1_silentProperties_fco_enc.yml \
+                --vault-password-file /home/users/infadm/rm-acd/vaultPwdfile.txt"""
+            
             # Add your actual Ansible playbook execution logic here
-            time.sleep(4)  # Simulate processing time
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully executed playbook: {playbook}")
+            time.sleep(60)  # Simulate long running playbook (1 minute for demo, actual can be 1 hour)
+            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully executed Ansible playbook: {playbook}")
         
         elif step_type == 'helm_upgrade':
             # Execute Helm upgrade
-            chart = step.get('chart', 'chart')
-            target_vms = step.get('targetVMs', [])
+            deployment_type = step.get('helmDeploymentType', '')
             
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Upgrading Helm chart: {chart}")
+            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Performing Helm upgrade for deployment type: {deployment_type}")
             # Add your actual Helm upgrade logic here
             time.sleep(3)  # Simulate processing time
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully upgraded Helm chart: {chart}")
+            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully performed Helm upgrade for: {deployment_type}")
         
         deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Step {step.get('order')} completed successfully")
         return True
@@ -123,7 +143,7 @@ def run_template_deployment(deployment_id, template, ft_number):
 
 @template_bp.route('/api/templates/save', methods=['POST'])
 def save_template():
-    """Save a generated template to the FT directory"""
+    """Save a generated template to the deployment templates directory"""
     try:
         data = request.get_json()
         ft_number = data.get('ft_number')
@@ -132,11 +152,11 @@ def save_template():
         if not ft_number or not template:
             return jsonify({'error': 'Missing ft_number or template'}), 400
         
-        # Create templates directory if it doesn't exist
-        templates_dir = os.path.join('/app/uploads', ft_number, 'templates')
+        # Create deployment templates directory if it doesn't exist
+        templates_dir = '/apps/deployment_templates'
         os.makedirs(templates_dir, exist_ok=True)
         
-        # Save template to file
+        # Save template to file with FT number in filename
         template_file = os.path.join(templates_dir, f'{ft_number}_template.json')
         with open(template_file, 'w') as f:
             json.dump(template, f, indent=2)
@@ -148,16 +168,16 @@ def save_template():
 
 @template_bp.route('/api/templates/list', methods=['GET'])
 def list_templates():
-    """List all available templates"""
+    """List all available templates from deployment templates directory"""
     try:
         templates = []
-        uploads_dir = '/app/uploads'
+        templates_dir = '/apps/deployment_templates'
         
-        if os.path.exists(uploads_dir):
-            for ft_dir in os.listdir(uploads_dir):
-                template_file = os.path.join(uploads_dir, ft_dir, 'templates', f'{ft_dir}_template.json')
-                if os.path.exists(template_file):
-                    templates.append(ft_dir)
+        if os.path.exists(templates_dir):
+            for file in os.listdir(templates_dir):
+                if file.endswith('_template.json'):
+                    ft_number = file.replace('_template.json', '')
+                    templates.append(ft_number)
         
         return jsonify(templates)
         
@@ -166,9 +186,9 @@ def list_templates():
 
 @template_bp.route('/api/templates/<ft_number>', methods=['GET'])
 def get_template(ft_number):
-    """Get a specific template"""
+    """Get a specific template from deployment templates directory"""
     try:
-        template_file = os.path.join('/app/uploads', ft_number, 'templates', f'{ft_number}_template.json')
+        template_file = os.path.join('/apps/deployment_templates', f'{ft_number}_template.json')
         
         if not os.path.exists(template_file):
             return jsonify({'error': 'Template not found'}), 404
@@ -258,3 +278,35 @@ def get_users():
         
     except Exception as e:
         return jsonify(['infadm', 'abpwrk1', 'root'])  # Fallback to default users
+
+@template_bp.route('/api/ansible-playbooks', methods=['GET'])
+def get_ansible_playbooks():
+    """Get available Ansible playbooks"""
+    try:
+        # Return predefined playbooks for now - you can modify this to read from filesystem
+        playbooks = [
+            'tc1_tc_changeSet_install.yml',
+            'tc1_deployment_playbook.yml',
+            'tc1_configuration_playbook.yml',
+            'tc1_maintenance_playbook.yml'
+        ]
+        return jsonify(playbooks)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@template_bp.route('/api/helm-deployment-types', methods=['GET'])
+def get_helm_deployment_types():
+    """Get available Helm deployment types"""
+    try:
+        # Return predefined deployment types - you can modify this to read from inventory
+        deployment_types = [
+            'rb1',
+            'pw1',
+            'tc1',
+            'abp1'
+        ]
+        return jsonify(deployment_types)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

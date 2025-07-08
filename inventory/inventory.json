@@ -4,5 +4,17 @@
     {"name": "batch1", "type": "batch", "ip": "54.173.6.57"}
   ],
   "users": ["infadm", "abpwrk1", "root"],
-  "systemd_services": ["docker.service", "postgresql-15.service", "zookeeper"]
+  "systemd_services": ["docker.service", "postgresql-15.service", "zookeeper", "apache2.service", "nginx.service", "mysql.service"],
+  "ansible_playbooks": [
+    "tc1_tc_changeSet_install.yml",
+    "tc1_deployment_playbook.yml", 
+    "tc1_configuration_playbook.yml",
+    "tc1_maintenance_playbook.yml"
+  ],
+  "helm_deployment_types": [
+    "rb1",
+    "pw1", 
+    "tc1",
+    "abp1"
+  ]
 }
