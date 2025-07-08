@@ -351,6 +351,46 @@ def get_systemd_services():
     logger.info("Getting list of systemd services")
     return jsonify(inventory["systemd_services"])
 
+
+# New APIs for template generator and Oneclick deploy using template
+
+@app.route('/api/ansible-playbooks', methods=['GET'])
+def get_ansible_playbooks():
+    """Get available Ansible playbooks from inventory"""
+    try:
+        inventory_path = '/app/inventory/inventory.json'
+        
+        if not os.path.exists(inventory_path):
+            return jsonify([])
+        
+        with open(inventory_path, 'r') as f:
+            inventory = json.load(f)
+        
+        playbooks = inventory.get('ansible_playbooks', [])
+        return jsonify(playbooks)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/helm-deployment-types', methods=['GET'])
+def get_helm_deployment_types():
+    """Get available Helm deployment types from inventory"""
+    try:
+        inventory_path = '/app/inventory/inventory.json'
+        
+        if not os.path.exists(inventory_path):
+            return jsonify([])
+        
+        with open(inventory_path, 'r') as f:
+            inventory = json.load(f)
+        
+        deployment_types = inventory.get('helm_deployment_types', [])
+        return jsonify(deployment_types)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# End of template generator and onclick deploy using template
     
 # API to deploy a file
 @app.route('/api/deploy/file', methods=['POST'])
