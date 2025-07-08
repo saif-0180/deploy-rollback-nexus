@@ -5,16 +5,54 @@
   ],
   "users": ["infadm", "abpwrk1", "root"],
   "systemd_services": ["docker.service", "postgresql-15.service", "zookeeper", "apache2.service", "nginx.service", "mysql.service"],
-  "ansible_playbooks": [
-    "tc1_tc_changeSet_install.yml",
-    "tc1_deployment_playbook.yml", 
-    "tc1_configuration_playbook.yml",
-    "tc1_maintenance_playbook.yml"
+  "playbooks": [
+    {
+      "name": "DBPopulate_Consul_Tokens.yml",
+      "path": "/home/users/infadm/rm-acd/playbooks/TC1/install_playbooks/DBPopulate_Consul_Tokens.yml",
+      "inventory": "/home/users/infadm/rm-acd/generated_inventory.ini",
+      "forks": 10,
+      "env_type": "K8S",
+      "extra_vars": [
+        "/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_common.yml",
+        "/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_topology.yml",
+        "/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_encrypted.yml",
+        "/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_topology_k8s.yml",
+        "/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_encrypted_k8s.yml",
+        "/home/users/infadm/workspace/TC_CD_PIPELINE1@2/../git_area/VM07/cd-input/silent_properties/ABP1_silentProperties_fco.yml",
+        "/home/users/infadm/workspace/TC_CD_PIPELINE1@2/../git_area/VM07/cd-input/silent_properties/ABP1_silentProperties_fco_enc.yml"
+      ],
+      "vault_password_file": "/home/users/infadm/rm-acd/vaultPwdfile.txt"
+    },
+    {
+      "name": "tc1_helm_values_creation_play.yml",
+      "path": "/home/users/infadm/rm-acd/playbooks/TC1/install_playbooks/tc1_helm_values_creation_play.yml",
+      "inventory": "/home/users/infadm/rm-acd/generated_inventory.ini",
+      "forks": 10,
+      "env_type": "K8S",
+      "extra_vars": [
+        "/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_common.yml",
+        "/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_topology.yml",
+        "/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_encrypted.yml",
+        "/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_topology_k8s.yml",
+        "/home/users/infadm/rm-acd/acd_input/silentProperties/tc1_silentProperties_encrypted_k8s.yml",
+        "/home/users/infadm/workspace/TC_CD_PIPELINE1@2/../git_area/VM07/cd-input/silent_properties/ABP1_silentProperties_fco.yml",
+        "/home/users/infadm/workspace/TC_CD_PIPELINE1@2/../git_area/VM07/cd-input/silent_properties/ABP1_silentProperties_fco_enc.yml"
+      ],
+      "vault_password_file": "/home/users/infadm/rm-acd/vaultPwdfile.txt"
+    }
   ],
-  "helm_deployment_types": [
-    "rb1",
-    "pw1", 
-    "tc1",
-    "abp1"
+  "helm_upgrades": [
+    {
+      "pod_name": "avm1",
+      "command": "helmFU.Sh -f avm1 -t upgrade"
+    },
+    {
+      "pod_name": "avm2",
+      "command": "helmFU.Sh -f avm2 -t upgrade"
+    },
+    {
+      "pod_name": "cr1",
+      "command": "helmFU.Sh -f cr -t upgrade -c 1"
+    }
   ]
 }

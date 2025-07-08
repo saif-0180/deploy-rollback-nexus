@@ -10,7 +10,7 @@ import subprocess
 import logging
 import base64
 
-template_bp = Blueprint('template', __name__)
+deploy_template_bp = Blueprint('deploy_template', __name__)
 
 # Store active deployments
 active_deployments = {}
@@ -187,71 +187,37 @@ def run_template_deployment(deployment_id, template, ft_number):
         deployment['status'] = 'success'
         deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Template deployment completed successfully")
         
+        # Save logs to deployment history
+        save_deployment_logs(deployment_id, deployment, ft_number)
+        
     except Exception as e:
         deployment['status'] = 'failed'
         deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
 
-@template_bp.route('/api/templates/save', methods=['POST'])
-def save_template():
-    """Save a generated template to the deployment templates directory"""
+def save_deployment_logs(deployment_id, deployment, ft_number):
+    """Save deployment logs to deployment history"""
     try:
-        data = request.get_json()
-        ft_number = data.get('ft_number')
-        template = data.get('template')
+        logs_dir = '/apps/logs/deployment_history'
+        os.makedirs(logs_dir, exist_ok=True)
         
-        if not ft_number or not template:
-            return jsonify({'error': 'Missing ft_number or template'}), 400
+        log_entry = {
+            'deployment_id': deployment_id,
+            'ft_number': ft_number,
+            'operation': 'template_deployment',
+            'timestamp': deployment['started_at'],
+            'status': deployment['status'],
+            'logs': deployment['logs'],
+            'orchestration_user': 'infadm'
+        }
         
-        # Create deployment templates directory if it doesn't exist
-        templates_dir = '/apps/deployment_templates'
-        os.makedirs(templates_dir, exist_ok=True)
-        
-        # Save template to file with FT number in filename
-        template_file = os.path.join(templates_dir, f'{ft_number}_template.json')
-        with open(template_file, 'w') as f:
-            json.dump(template, f, indent=2)
-        
-        return jsonify({'message': 'Template saved successfully', 'path': template_file})
-        
+        log_file = os.path.join(logs_dir, f"{deployment_id}.json")
+        with open(log_file, 'w') as f:
+            json.dump(log_entry, f, indent=2)
+            
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Failed to save deployment logs: {str(e)}")
 
-@template_bp.route('/api/templates/list', methods=['GET'])
-def list_templates():
-    """List all available templates from deployment templates directory"""
-    try:
-        templates = []
-        templates_dir = '/apps/deployment_templates'
-        
-        if os.path.exists(templates_dir):
-            for file in os.listdir(templates_dir):
-                if file.endswith('_template.json'):
-                    ft_number = file.replace('_template.json', '')
-                    templates.append(ft_number)
-        
-        return jsonify(templates)
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@template_bp.route('/api/templates/<ft_number>', methods=['GET'])
-def get_template(ft_number):
-    """Get a specific template from deployment templates directory"""
-    try:
-        template_file = os.path.join('/apps/deployment_templates', f'{ft_number}_template.json')
-        
-        if not os.path.exists(template_file):
-            return jsonify({'error': 'Template not found'}), 404
-        
-        with open(template_file, 'r') as f:
-            template = json.load(f)
-        
-        return jsonify(template)
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@template_bp.route('/api/deploy/template', methods=['POST'])
+@deploy_template_bp.route('/api/deploy/template', methods=['POST'])
 def deploy_template():
     """Start a template deployment"""
     try:
@@ -292,7 +258,7 @@ def deploy_template():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@template_bp.route('/api/deploy/template/<deployment_id>/logs', methods=['GET'])
+@deploy_template_bp.route('/api/deploy/template/<deployment_id>/logs', methods=['GET'])
 def get_deployment_logs(deployment_id):
     """Get logs for a template deployment"""
     try:
@@ -311,25 +277,8 @@ def get_deployment_logs(deployment_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@template_bp.route('/api/users', methods=['GET'])
-def get_users():
-    """Get users from inventory"""
-    try:
-        inventory_path = '/app/inventory/inventory.json'
-        
-        if not os.path.exists(inventory_path):
-            return jsonify(['infadm', 'abpwrk1', 'root'])  # Default users
-        
-        with open(inventory_path, 'r') as f:
-            inventory = json.load(f)
-        
-        users = inventory.get('users', ['infadm', 'abpwrk1', 'root'])
-        return jsonify(users)
-        
-    except Exception as e:
-        return jsonify(['infadm', 'abpwrk1', 'root'])  # Fallback to default users
-
-@template_bp.route('/api/playbooks', methods=['GET'])
+# New API endpoints for inventory data
+@deploy_template_bp.route('/api/playbooks', methods=['GET'])
 def get_playbooks():
     """Get playbooks from inventory"""
     try:
@@ -346,7 +295,7 @@ def get_playbooks():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@template_bp.route('/api/helm-upgrades', methods=['GET'])
+@deploy_template_bp.route('/api/helm-upgrades', methods=['GET'])
 def get_helm_upgrades():
     """Get helm upgrades from inventory"""
     try:
@@ -363,7 +312,7 @@ def get_helm_upgrades():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@template_bp.route('/api/db-inventory', methods=['GET'])
+@deploy_template_bp.route('/api/db-inventory', methods=['GET'])
 def get_db_inventory():
     """Get database inventory"""
     try:

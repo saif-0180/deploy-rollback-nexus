@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { Trash2, Plus, Edit3 } from "lucide-react";
 import VMSelector from './VMSelector';
-import DatabaseConnectionSelector from './DatabaseConnectionSelector';
 import LogDisplay from './LogDisplay';
 
 interface DeploymentStep {
@@ -42,9 +41,6 @@ interface TemplateGeneratorProps {
 const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerated }) => {
   const [selectedFt, setSelectedFt] = useState<string>("");
   const [steps, setSteps] = useState<DeploymentStep[]>([]);
-  const [currentStep, setCurrentStep] = useState<DeploymentStep | null>(null);
-  const [isEditingStep, setIsEditingStep] = useState(false);
-  const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [generatedTemplate, setGeneratedTemplate] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editableTemplate, setEditableTemplate] = useState<string>('');
@@ -62,12 +58,13 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   const [stepTargetPath, setStepTargetPath] = useState('/home/users/abpwrk1/pbin/app');
   const [stepDbConnection, setStepDbConnection] = useState('');
   const [stepDbUser, setStepDbUser] = useState('');
-  const [stepDbName, setStepDbName] = useState('');
   const [stepDbPassword, setStepDbPassword] = useState('');
   const [stepService, setStepService] = useState('');
   const [stepOperation, setStepOperation] = useState('');
   const [stepPlaybook, setStepPlaybook] = useState('');
   const [stepHelmDeploymentType, setStepHelmDeploymentType] = useState('');
+  const [isEditingStep, setIsEditingStep] = useState(false);
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
 
   // Fetch FT numbers
   const { data: fts = [], isLoading: isLoadingFts } = useQuery({
@@ -91,22 +88,12 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
     enabled: !!stepFt,
   });
 
-  // Fetch database connections
-  const { data: dbConnections = [] } = useQuery({
-    queryKey: ['db-connections'],
+  // Fetch database connections from db_inventory
+  const { data: dbInventory = { db_connections: [], db_users: [] } } = useQuery({
+    queryKey: ['db-inventory'],
     queryFn: async () => {
-      const response = await fetch('/api/db-connections');
-      if (!response.ok) throw new Error('Failed to fetch database connections');
-      return response.json();
-    },
-  });
-
-  // Fetch database users
-  const { data: dbUsers = [] } = useQuery({
-    queryKey: ['db-users'],
-    queryFn: async () => {
-      const response = await fetch('/api/db-users');
-      if (!response.ok) throw new Error('Failed to fetch database users');
+      const response = await fetch('/api/db-inventory');
+      if (!response.ok) throw new Error('Failed to fetch database inventory');
       return response.json();
     },
   });
@@ -132,21 +119,21 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   });
 
   // Fetch ansible playbooks
-  const { data: ansiblePlaybooks = [] } = useQuery({
-    queryKey: ['ansible-playbooks'],
+  const { data: playbooksData = { playbooks: [] } } = useQuery({
+    queryKey: ['playbooks-inventory'],
     queryFn: async () => {
-      const response = await fetch('/api/ansible-playbooks');
-      if (!response.ok) throw new Error('Failed to fetch ansible playbooks');
+      const response = await fetch('/api/playbooks');
+      if (!response.ok) throw new Error('Failed to fetch playbooks');
       return response.json();
     },
   });
 
   // Fetch helm deployment types
-  const { data: helmDeploymentTypes = [] } = useQuery({
-    queryKey: ['helm-deployment-types'],
+  const { data: helmData = { helm_upgrades: [] } } = useQuery({
+    queryKey: ['helm-inventory'],
     queryFn: async () => {
-      const response = await fetch('/api/helm-deployment-types');
-      if (!response.ok) throw new Error('Failed to fetch helm deployment types');
+      const response = await fetch('/api/helm-upgrades');
+      if (!response.ok) throw new Error('Failed to fetch helm upgrades');
       return response.json();
     },
   });
@@ -165,7 +152,6 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
     setStepTargetPath('/home/users/abpwrk1/pbin/app');
     setStepDbConnection('');
     setStepDbUser('');
-    setStepDbName('');
     setStepDbPassword('');
     setStepService('');
     setStepOperation('');
@@ -179,14 +165,6 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         ? [...prev, fileName]
         : prev.filter(f => f !== fileName)
     );
-  };
-
-  const handleDbConnectionChange = (connection: { hostname: string; port: string; }) => {
-    setStepDbConnection(`${connection.hostname}:${connection.port}`);
-  };
-
-  const handleDbUserChange = (user: string) => {
-    setStepDbUser(user);
   };
 
   const addStep = () => {
@@ -264,7 +242,6 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
       newStep.selectedFiles = [...stepFiles];
       newStep.dbConnection = stepDbConnection;
       newStep.dbUser = stepDbUser;
-      newStep.dbName = stepDbName;
       newStep.dbPassword = stepDbPassword ? btoa(stepDbPassword) : ''; // Base64 encode password
     } else if (stepType === 'service_restart') {
       newStep.service = stepService;
@@ -291,7 +268,6 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
     setStepTargetPath(step.targetPath || '/home/users/abpwrk1/pbin/app');
     setStepDbConnection(step.dbConnection || '');
     setStepDbUser(step.dbUser || '');
-    setStepDbName(step.dbName || '');
     setStepDbPassword(''); // Don't decode password for security
     setStepService(step.service || '');
     setStepOperation(step.operation || '');
@@ -317,7 +293,6 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
             targetPath: stepTargetPath,
             dbConnection: stepDbConnection,
             dbUser: stepDbUser,
-            dbName: stepDbName,
             dbPassword: stepDbPassword ? btoa(stepDbPassword) : step.dbPassword,
             service: stepService,
             operation: stepOperation,
@@ -385,7 +360,6 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
               files: step.selectedFiles,
               dbConnection: step.dbConnection,
               dbUser: step.dbUser,
-              dbName: step.dbName,
               dbPassword: step.dbPassword
             };
           } else if (step.type === 'service_restart') {
@@ -617,22 +591,32 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
 
             <div>
               <Label className="text-[#F79B72]">Database Connection</Label>
-              <DatabaseConnectionSelector
-                onConnectionChange={handleDbConnectionChange}
-                onUserChange={handleDbUserChange}
-                selectedConnection={stepDbConnection}
-                selectedUser={stepDbUser}
-              />
+              <Select value={stepDbConnection} onValueChange={setStepDbConnection}>
+                <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                  <SelectValue placeholder="Select Database Connection" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dbInventory.db_connections?.map((conn: any) => (
+                    <SelectItem key={conn.db_connection} value={conn.db_connection}>
+                      {conn.db_connection}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
-              <Label className="text-[#F79B72]">Database Name</Label>
-              <Input
-                value={stepDbName}
-                onChange={(e) => setStepDbName(e.target.value)}
-                placeholder="Database name"
-                className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30"
-              />
+              <Label className="text-[#F79B72]">Database User</Label>
+              <Select value={stepDbUser} onValueChange={setStepDbUser}>
+                <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                  <SelectValue placeholder="Select Database User" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dbInventory.db_users?.map((user: string) => (
+                    <SelectItem key={user} value={user}>{user}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
@@ -699,8 +683,8 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                 <SelectValue placeholder="Select Ansible Playbook" />
               </SelectTrigger>
               <SelectContent>
-                {ansiblePlaybooks.map((playbook: string) => (
-                  <SelectItem key={playbook} value={playbook}>{playbook}</SelectItem>
+                {playbooksData.playbooks?.map((playbook: any) => (
+                  <SelectItem key={playbook.name} value={playbook.name}>{playbook.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -716,8 +700,8 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                 <SelectValue placeholder="Select Helm Deployment Type" />
               </SelectTrigger>
               <SelectContent>
-                {helmDeploymentTypes.map((type: string) => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                {helmData.helm_upgrades?.map((upgrade: any) => (
+                  <SelectItem key={upgrade.pod_name} value={upgrade.pod_name}>{upgrade.pod_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -732,7 +716,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
       <h2 className="text-2xl font-bold text-[#F79B72] mb-4">AI Template Generator</h2>
       
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Left Column - Form */}
+        {/* Left Column - Form and Generated Template */}
         <div className="space-y-6">
           {/* Main FT Selection */}
           <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
@@ -869,11 +853,11 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                   <Textarea
                     value={editableTemplate}
                     onChange={(e) => setEditableTemplate(e.target.value)}
-                    className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 min-h-[400px] font-mono text-xs"
-                    rows={20}
+                    className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 min-h-[300px] font-mono text-xs"
+                    rows={15}
                   />
                 ) : (
-                  <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap overflow-x-auto bg-[#2A4759] p-4 rounded-md max-h-[400px] overflow-y-auto">
+                  <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap overflow-x-auto bg-[#2A4759] p-4 rounded-md max-h-[300px] overflow-y-auto">
                     {JSON.stringify(generatedTemplate, null, 2)}
                   </pre>
                 )}
@@ -882,7 +866,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
           )}
         </div>
 
-        {/* Right Column - Logs */}
+        {/* Right Column - Logs at Bottom */}
         <div>
           <LogDisplay
             logs={logs}
