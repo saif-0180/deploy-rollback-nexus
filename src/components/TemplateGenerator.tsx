@@ -115,7 +115,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   const { data: systemdServices = [] } = useQuery({
     queryKey: ['systemd-services'],
     queryFn: async () => {
-      const response = await fetch('/api/systemd-services');
+      const response = await fetch('/api/systemd/services');
       if (!response.ok) throw new Error('Failed to fetch systemd services');
       return response.json();
     },
