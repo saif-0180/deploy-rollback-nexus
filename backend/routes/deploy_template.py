@@ -9,42 +9,37 @@ from datetime import datetime
 import subprocess
 import logging
 import base64
+import hashlib
 
 deploy_template_bp = Blueprint('deploy_template', __name__)
 
 # Store active deployments
 active_deployments = {}
 
-def execute_deployment_step(step, deployment_id, ft_number, orchestration_user='infadm'):
-    """Execute a single deployment step"""
-    deployment = active_deployments.get(deployment_id)
-    if not deployment:
-        return False
-    
-    try:
-        step_type = step.get('type')
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Executing step {step.get('order')}: {step.get('description')}")
-        
-        if step_type == 'file_deployment':
-            return execute_file_deployment(step, deployment_id, ft_number)
-        elif step_type == 'sql_deployment':
-            return execute_sql_deployment(step, deployment_id, ft_number)
-        elif step_type == 'service_restart':
-            return execute_service_restart(step, deployment_id)
-        elif step_type == 'ansible_playbook':
-            return execute_ansible_playbook(step, deployment_id)
-        elif step_type == 'helm_upgrade':
-            return execute_helm_upgrade(step, deployment_id)
-        else:
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Unknown step type: {step_type}")
-            return False
-            
-    except Exception as e:
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR in step {step.get('order')}: {str(e)}")
-        return False
+def get_current_user():
+    """Get current authenticated user from session"""
+    from flask import session
+    return session.get('user')
 
-def execute_file_deployment(step, deployment_id, ft_number):
-    """Execute file deployment step"""
+def log_message(deployment_id, message):
+    """Add a log message to the deployment"""
+    if deployment_id in active_deployments:
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        active_deployments[deployment_id]['logs'].append(f"[{timestamp}] {message}")
+
+def calculate_file_checksum(file_path):
+    """Calculate SHA256 checksum of a file"""
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+    except Exception as e:
+        return None
+
+def execute_ansible_file_deployment(step, deployment_id, ft_number):
+    """Execute file deployment using Ansible with validation and backup"""
     deployment = active_deployments.get(deployment_id)
     if not deployment:
         return False
@@ -56,64 +51,118 @@ def execute_file_deployment(step, deployment_id, ft_number):
         target_vms = step.get('targetVMs', [])
         ft_source = step.get('ftNumber', ft_number)
         
-        for vm in target_vms:
+        log_message(deployment_id, f"Starting Ansible file deployment for FT {ft_source}")
+        
+        # Generate Ansible playbook for file deployment
+        playbook_file = f"/tmp/file_deploy_{deployment_id}.yml"
+        inventory_file = f"/tmp/inventory_{deployment_id}"
+        
+        # Load inventory to get VM details
+        inventory_path = '/app/inventory/inventory.json'
+        with open(inventory_path, 'r') as f:
+            inventory = json.load(f)
+        
+        # Create inventory file
+        with open(inventory_file, 'w') as f:
+            f.write("[file_targets]\n")
+            for vm_name in target_vms:
+                vm = next((v for v in inventory["vms"] if v["name"] == vm_name), None)
+                if vm:
+                    f.write(f"{vm_name} ansible_host={vm['ip']} ansible_user=infadm ansible_ssh_private_key_file=/home/users/infadm/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'\n")
+        
+        # Create Ansible playbook with validation and backup
+        with open(playbook_file, 'w') as f:
+            f.write(f"""---
+- name: Deploy files with validation and backup
+  hosts: file_targets
+  gather_facts: true
+  become: true
+  vars:
+    target_path: "{target_path}"
+    target_user: "{target_user}"
+    ft_source: "{ft_source}"
+    deployment_id: "{deployment_id}"
+  tasks:
+    - name: Ensure target directory exists
+      ansible.builtin.file:
+        path: "{{{{ target_path }}}}"
+        state: directory
+        owner: "{{{{ target_user }}}}"
+        group: "{{{{ target_user }}}}"
+        mode: '0755'
+        
+""")
+            
             for file in files:
                 source_file = os.path.join('/app/fixfiles', 'AllFts', ft_source, file)
                 
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Copying {file} from FT {ft_source} to {vm}:{target_path}")
-                
-                if not os.path.exists(source_file):
-                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Source file not found: {source_file}")
+                # Calculate source file checksum
+                source_checksum = calculate_file_checksum(source_file)
+                if not source_checksum:
+                    log_message(deployment_id, f"ERROR: Could not calculate checksum for {file}")
                     return False
                 
-                # Construct SCP command
-                cmd = [
-                    'scp', '-o', 'StrictHostKeyChecking=no', 
-                    source_file, 
-                    f"{target_user}@{vm}:{target_path}/{file}"
-                ]
+                log_message(deployment_id, f"Source checksum for {file}: {source_checksum}")
                 
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Command: {' '.join(cmd)}")
-                
-                try:
-                    result = subprocess.run(
-                        cmd, 
-                        capture_output=True, 
-                        text=True, 
-                        timeout=300
-                    )
-                    
-                    if result.returncode == 0:
-                        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully copied {file} to {vm}")
-                        
-                        # Set ownership if needed
-                        if target_user != 'root':
-                            chown_cmd = [
-                                'ssh', '-o', 'StrictHostKeyChecking=no',
-                                f"root@{vm}",
-                                f"chown {target_user}:{target_user} {target_path}/{file}"
-                            ]
-                            subprocess.run(chown_cmd, capture_output=True, text=True, timeout=60)
-                            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Set ownership of {file} to {target_user}")
-                    else:
-                        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR copying {file} to {vm}: {result.stderr}")
-                        return False
-                        
-                except subprocess.TimeoutExpired:
-                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: File copy timed out for {file}")
-                    return False
-                except Exception as e:
-                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
-                    return False
+                f.write(f"""
+    # Tasks for file: {file}
+    - name: Check if {file} exists on target
+      ansible.builtin.stat:
+        path: "{{{{ target_path }}}}/{file}"
+      register: file_stat_{file.replace('.', '_').replace('-', '_')}
+      
+    - name: Create backup of existing {file}
+      ansible.builtin.copy:
+        src: "{{{{ target_path }}}}/{file}"
+        dest: "{{{{ target_path }}}}/{file}.backup.{{{{ ansible_date_time.epoch }}}}"
+        remote_src: true
+        owner: "{{{{ target_user }}}}"
+        group: "{{{{ target_user }}}}"
+        mode: preserve
+      when: file_stat_{file.replace('.', '_').replace('-', '_')}.stat.exists
+      
+    - name: Copy {file} to target
+      ansible.builtin.copy:
+        src: "{source_file}"
+        dest: "{{{{ target_path }}}}/{file}"
+        owner: "{{{{ target_user }}}}"
+        group: "{{{{ target_user }}}}"
+        mode: '0644'
+        checksum: "{source_checksum}"
+      register: copy_result_{file.replace('.', '_').replace('-', '_')}
+      
+    - name: Validate {file} checksum
+      ansible.builtin.stat:
+        path: "{{{{ target_path }}}}/{file}"
+        checksum_algorithm: sha256
+      register: target_file_stat_{file.replace('.', '_').replace('-', '_')}
+      
+    - name: Verify {file} checksum matches
+      ansible.builtin.fail:
+        msg: "Checksum validation failed for {file}. Expected: {source_checksum}, Got: {{{{ target_file_stat_{file.replace('.', '_').replace('-', '_')}.stat.checksum }}}}"
+      when: target_file_stat_{file.replace('.', '_').replace('-', '_')}.stat.checksum != "{source_checksum}"
+      
+    - name: Verify {file} ownership
+      ansible.builtin.file:
+        path: "{{{{ target_path }}}}/{file}"
+        owner: "{{{{ target_user }}}}"
+        group: "{{{{ target_user }}}}"
+        mode: '0644'
         
-        return True
+    - name: Log successful deployment of {file}
+      ansible.builtin.debug:
+        msg: "Successfully deployed {file} with checksum validation and proper ownership"
+""")
+        
+        # Execute Ansible playbook
+        return execute_ansible_playbook_file(playbook_file, inventory_file, deployment_id)
         
     except Exception as e:
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR in file deployment: {str(e)}")
+        log_message(deployment_id, f"ERROR in Ansible file deployment: {str(e)}")
         return False
 
-def execute_sql_deployment(step, deployment_id, ft_number):
-    """Execute SQL deployment step"""
+def execute_ansible_sql_deployment(step, deployment_id, ft_number):
+    """Execute SQL deployment using Ansible"""
     deployment = active_deployments.get(deployment_id)
     if not deployment:
         return False
@@ -125,98 +174,92 @@ def execute_sql_deployment(step, deployment_id, ft_number):
         db_password_encoded = step.get('dbPassword', '')
         ft_source = step.get('ftNumber', ft_number)
         
-        # Load db_inventory to get actual connection details
-        db_inventory_path = '/app/inventory/db_inventory.json'
-        if not os.path.exists(db_inventory_path):
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: DB inventory file not found")
-            return False
+        log_message(deployment_id, f"Starting Ansible SQL deployment for FT {ft_source}")
         
+        # Load db_inventory to get connection details
+        db_inventory_path = '/app/inventory/db_inventory.json'
         with open(db_inventory_path, 'r') as f:
             db_inventory = json.load(f)
         
-        # Find the connection details
         connection_details = next(
             (conn for conn in db_inventory.get('db_connections', []) 
              if conn['db_connection'] == db_connection), None
         )
         
         if not connection_details:
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: DB connection '{db_connection}' not found in inventory")
+            log_message(deployment_id, f"ERROR: DB connection '{db_connection}' not found")
             return False
         
         hostname = connection_details['hostname']
         port = connection_details['port']
         db_name = connection_details['db_name']
-        
-        # Decode base64 password
         db_password = base64.b64decode(db_password_encoded).decode('utf-8') if db_password_encoded else ''
         
-        for sql_file in files:
-            source_file = os.path.join('/app/fixfiles', 'AllFts', ft_source, sql_file)
-            
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Executing SQL file: {sql_file}")
-            
-            if not os.path.exists(source_file):
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: SQL file not found: {source_file}")
-                return False
-            
-            # Check if psql is available
-            psql_check = subprocess.run(["which", "psql"], capture_output=True, text=True)
-            if psql_check.returncode != 0:
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: psql command not found")
-                return False
-            
-            cmd = ["psql", "-h", hostname, "-p", port, "-d", db_name, "-U", db_user, "-f", source_file]
-            env = os.environ.copy()
-            
-            if db_password:
-                env["PGPASSWORD"] = db_password
-            
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Command: psql -h {hostname} -p {port} -d {db_name} -U {db_user} -f {sql_file}")
-            
-            try:
-                result = subprocess.run(
-                    cmd, 
-                    capture_output=True, 
-                    text=True, 
-                    env=env,
-                    timeout=300
-                )
-                
-                # Process output
-                all_output = ""
-                if result.stdout:
-                    all_output += result.stdout
-                if result.stderr:
-                    all_output += result.stderr
-                
-                if all_output:
-                    for line in all_output.strip().split('\n'):
-                        line_stripped = line.strip()
-                        if line_stripped:
-                            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] {line_stripped}")
-                
-                if result.returncode == 0:
-                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully executed SQL file: {sql_file}")
-                else:
-                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: SQL execution failed for {sql_file}")
-                    return False
-                    
-            except subprocess.TimeoutExpired:
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: SQL execution timed out for {sql_file}")
-                return False
-            except Exception as e:
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
-                return False
+        # Generate Ansible playbook for SQL deployment
+        playbook_file = f"/tmp/sql_deploy_{deployment_id}.yml"
+        inventory_file = f"/tmp/inventory_{deployment_id}"
         
-        return True
+        # Create localhost inventory for SQL execution
+        with open(inventory_file, 'w') as f:
+            f.write("[sql_targets]\n")
+            f.write("localhost ansible_connection=local\n")
+        
+        # Create Ansible playbook for SQL execution
+        with open(playbook_file, 'w') as f:
+            f.write(f"""---
+- name: Execute SQL files
+  hosts: sql_targets
+  gather_facts: false
+  vars:
+    db_hostname: "{hostname}"
+    db_port: "{port}"
+    db_name: "{db_name}"
+    db_user: "{db_user}"
+    db_password: "{db_password}"
+    ft_source: "{ft_source}"
+  tasks:
+    - name: Check if psql is available
+      ansible.builtin.command: which psql
+      register: psql_check
+      failed_when: false
+      
+    - name: Fail if psql not found
+      ansible.builtin.fail:
+        msg: "PostgreSQL client (psql) not found. Please install postgresql-client."
+      when: psql_check.rc != 0
+      
+""")
+            
+            for sql_file in files:
+                source_file = os.path.join('/app/fixfiles', 'AllFts', ft_source, sql_file)
+                f.write(f"""
+    - name: Execute SQL file {sql_file}
+      ansible.builtin.shell: |
+        export PGPASSWORD="{db_password}"
+        psql -h "{{{{ db_hostname }}}}" -p "{{{{ db_port }}}}" -d "{{{{ db_name }}}}" -U "{{{{ db_user }}}}" -f "{source_file}"
+      register: sql_result_{sql_file.replace('.', '_').replace('-', '_')}
+      environment:
+        PGPASSWORD: "{{{{ db_password }}}}"
+        
+    - name: Log SQL execution result for {sql_file}
+      ansible.builtin.debug:
+        var: sql_result_{sql_file.replace('.', '_').replace('-', '_')}.stdout_lines
+        
+    - name: Log SQL execution errors for {sql_file}
+      ansible.builtin.debug:
+        var: sql_result_{sql_file.replace('.', '_').replace('-', '_')}.stderr_lines
+      when: sql_result_{sql_file.replace('.', '_').replace('-', '_')}.stderr_lines is defined and sql_result_{sql_file.replace('.', '_').replace('-', '_')}.stderr_lines | length > 0
+""")
+        
+        # Execute Ansible playbook
+        return execute_ansible_playbook_file(playbook_file, inventory_file, deployment_id)
         
     except Exception as e:
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR in SQL deployment: {str(e)}")
+        log_message(deployment_id, f"ERROR in Ansible SQL deployment: {str(e)}")
         return False
 
-def execute_service_restart(step, deployment_id):
-    """Execute service restart step"""
+def execute_ansible_service_restart(step, deployment_id):
+    """Execute service restart using Ansible"""
     deployment = active_deployments.get(deployment_id)
     if not deployment:
         return False
@@ -226,53 +269,153 @@ def execute_service_restart(step, deployment_id):
         operation = step.get('operation', 'restart')
         target_vms = step.get('targetVMs', [])
         
-        for vm in target_vms:
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Performing {operation} on {service} on {vm}")
-            
-            cmd = [
-                'ssh', '-o', 'StrictHostKeyChecking=no',
-                f"root@{vm}",
-                f"systemctl {operation} {service}"
-            ]
-            
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Command: {' '.join(cmd)}")
-            
-            try:
-                result = subprocess.run(
-                    cmd, 
-                    capture_output=True, 
-                    text=True, 
-                    timeout=120
-                )
-                
-                if result.stdout:
-                    for line in result.stdout.strip().split('\n'):
-                        if line.strip():
-                            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] {line.strip()}")
-                
-                if result.stderr:
-                    for line in result.stderr.strip().split('\n'):
-                        if line.strip():
-                            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] {line.strip()}")
-                
-                if result.returncode == 0:
-                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully performed {operation} on {service} on {vm}")
-                else:
-                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Service operation failed on {vm}")
-                    return False
-                    
-            except subprocess.TimeoutExpired:
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Service operation timed out on {vm}")
-                return False
-            except Exception as e:
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
-                return False
+        log_message(deployment_id, f"Starting Ansible service {operation} for {service}")
         
-        return True
+        # Generate Ansible playbook
+        playbook_file = f"/tmp/service_{deployment_id}.yml"
+        inventory_file = f"/tmp/inventory_{deployment_id}"
+        
+        # Load inventory to get VM details
+        inventory_path = '/app/inventory/inventory.json'
+        with open(inventory_path, 'r') as f:
+            inventory = json.load(f)
+        
+        # Create inventory file
+        with open(inventory_file, 'w') as f:
+            f.write("[service_targets]\n")
+            for vm_name in target_vms:
+                vm = next((v for v in inventory["vms"] if v["name"] == vm_name), None)
+                if vm:
+                    f.write(f"{vm_name} ansible_host={vm['ip']} ansible_user=infadm ansible_ssh_private_key_file=/home/users/infadm/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'\n")
+        
+        # Create Ansible playbook
+        with open(playbook_file, 'w') as f:
+            f.write(f"""---
+- name: Service {operation} operation
+  hosts: service_targets
+  gather_facts: false
+  become: true
+  vars:
+    service_name: "{service}"
+    service_operation: "{operation}"
+  tasks:
+    - name: Execute service {operation}
+      ansible.builtin.systemd:
+        name: "{{{{ service_name }}}}"
+        state: "{{{{ 'started' if service_operation == 'start' else 'stopped' if service_operation == 'stop' else 'restarted' if service_operation == 'restart' else service_operation }}}}"
+        enabled: "{{{{ true if service_operation == 'enable' else false if service_operation == 'disable' else omit }}}}"
+      register: service_result
+      when: service_operation in ['start', 'stop', 'restart', 'enable', 'disable']
+      
+    - name: Get service status
+      ansible.builtin.systemd:
+        name: "{{{{ service_name }}}}"
+      register: service_status
+      when: service_operation == 'status'
+      
+    - name: Log service operation result
+      ansible.builtin.debug:
+        msg: "Service {{{{ service_name }}}} {{{{ service_operation }}}} completed successfully"
+      when: service_operation != 'status'
+      
+    - name: Log service status
+      ansible.builtin.debug:
+        var: service_status
+      when: service_operation == 'status'
+""")
+        
+        # Execute Ansible playbook
+        return execute_ansible_playbook_file(playbook_file, inventory_file, deployment_id)
         
     except Exception as e:
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR in service restart: {str(e)}")
+        log_message(deployment_id, f"ERROR in Ansible service operation: {str(e)}")
         return False
+
+def execute_ansible_playbook_file(playbook_file, inventory_file, deployment_id):
+    """Execute an Ansible playbook file and capture output"""
+    try:
+        # Ensure control path directory exists
+        os.makedirs('/tmp/ansible-ssh', exist_ok=True)
+        
+        # Set up environment
+        env_vars = os.environ.copy()
+        env_vars["ANSIBLE_CONFIG"] = "/etc/ansible/ansible.cfg"
+        env_vars["ANSIBLE_HOST_KEY_CHECKING"] = "False"
+        env_vars["ANSIBLE_SSH_CONTROL_PATH"] = "/tmp/ansible-ssh/%h-%p-%r"
+        env_vars["ANSIBLE_SSH_CONTROL_PATH_DIR"] = "/tmp/ansible-ssh"
+        
+        cmd = ["ansible-playbook", "-i", inventory_file, playbook_file, "-v"]
+        
+        log_message(deployment_id, f"Executing: {' '.join(cmd)}")
+        
+        # Use Popen for real-time output
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env_vars,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        # Read output in real-time
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                log_message(deployment_id, output.strip())
+        
+        rc = process.poll()
+        
+        # Clean up temporary files
+        try:
+            os.remove(playbook_file)
+            os.remove(inventory_file)
+        except Exception as e:
+            log_message(deployment_id, f"Warning: Could not clean up temporary files: {str(e)}")
+        
+        if rc == 0:
+            log_message(deployment_id, "SUCCESS: Ansible playbook executed successfully")
+            return True
+        else:
+            log_message(deployment_id, f"ERROR: Ansible playbook failed with return code: {rc}")
+            return False
+            
+    except Exception as e:
+        log_message(deployment_id, f"ERROR executing Ansible playbook: {str(e)}")
+        return False
+
+def execute_deployment_step(step, deployment_id, ft_number, orchestration_user='infadm'):
+    """Execute a single deployment step using Ansible"""
+    deployment = active_deployments.get(deployment_id)
+    if not deployment:
+        return False
+    
+    try:
+        step_type = step.get('type')
+        log_message(deployment_id, f"Executing step {step.get('order')}: {step.get('description')}")
+        
+        if step_type == 'file_deployment':
+            return execute_ansible_file_deployment(step, deployment_id, ft_number)
+        elif step_type == 'sql_deployment':
+            return execute_ansible_sql_deployment(step, deployment_id, ft_number)
+        elif step_type == 'service_restart':
+            return execute_ansible_service_restart(step, deployment_id)
+        elif step_type == 'ansible_playbook':
+            return execute_ansible_playbook(step, deployment_id)
+        elif step_type == 'helm_upgrade':
+            return execute_helm_upgrade(step, deployment_id)
+        else:
+            log_message(deployment_id, f"ERROR: Unknown step type: {step_type}")
+            return False
+            
+    except Exception as e:
+        log_message(deployment_id, f"ERROR in step {step.get('order')}: {str(e)}")
+        return False
+
+# ... keep existing code (execute_ansible_playbook, execute_helm_upgrade, run_template_deployment, save_deployment_logs, API routes) the same ...
 
 def execute_ansible_playbook(step, deployment_id):
     """Execute Ansible playbook step"""
@@ -286,7 +429,7 @@ def execute_ansible_playbook(step, deployment_id):
         # Load inventory to get playbook details
         inventory_path = '/app/inventory/inventory.json'
         if not os.path.exists(inventory_path):
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Inventory file not found")
+            log_message(deployment_id, f"ERROR: Inventory file not found")
             return False
         
         with open(inventory_path, 'r') as f:
@@ -299,10 +442,10 @@ def execute_ansible_playbook(step, deployment_id):
         )
         
         if not playbook_details:
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Playbook '{playbook_name}' not found in inventory")
+            log_message(deployment_id, f"ERROR: Playbook '{playbook_name}' not found in inventory")
             return False
         
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Running Ansible playbook: {playbook_name}")
+        log_message(deployment_id, f"Running Ansible playbook: {playbook_name}")
         
         # Construct the ansible-playbook command
         cmd_parts = [
@@ -321,7 +464,7 @@ def execute_ansible_playbook(step, deployment_id):
         if playbook_details.get('vault_password_file'):
             cmd_parts.extend(['--vault-password-file', playbook_details['vault_password_file']])
         
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Command: {' '.join(cmd_parts)}")
+        log_message(deployment_id, f"Command: {' '.join(cmd_parts)}")
         
         try:
             # Use Popen for real-time output
@@ -340,23 +483,23 @@ def execute_ansible_playbook(step, deployment_id):
                 if output == '' and process.poll() is not None:
                     break
                 if output:
-                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] {output.strip()}")
+                    log_message(deployment_id, output.strip())
             
             rc = process.poll()
             
             if rc == 0:
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully executed Ansible playbook: {playbook_name}")
+                log_message(deployment_id, f"Successfully executed Ansible playbook: {playbook_name}")
                 return True
             else:
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Ansible playbook failed with return code: {rc}")
+                log_message(deployment_id, f"ERROR: Ansible playbook failed with return code: {rc}")
                 return False
                 
         except Exception as e:
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
+            log_message(deployment_id, f"ERROR: {str(e)}")
             return False
         
     except Exception as e:
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR in Ansible playbook execution: {str(e)}")
+        log_message(deployment_id, f"ERROR in Ansible playbook execution: {str(e)}")
         return False
 
 def execute_helm_upgrade(step, deployment_id):
@@ -371,7 +514,7 @@ def execute_helm_upgrade(step, deployment_id):
         # Load inventory to get helm upgrade details
         inventory_path = '/app/inventory/inventory.json'
         if not os.path.exists(inventory_path):
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Inventory file not found")
+            log_message(deployment_id, f"ERROR: Inventory file not found")
             return False
         
         with open(inventory_path, 'r') as f:
@@ -384,10 +527,10 @@ def execute_helm_upgrade(step, deployment_id):
         )
         
         if not helm_details:
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Helm deployment type '{deployment_type}' not found in inventory")
+            log_message(deployment_id, f"ERROR: Helm deployment type '{deployment_type}' not found in inventory")
             return False
         
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Performing Helm upgrade for: {deployment_type}")
+        log_message(deployment_id, f"Performing Helm upgrade for: {deployment_type}")
         
         # Execute on batch1 VM as admin user
         cmd = [
@@ -396,7 +539,7 @@ def execute_helm_upgrade(step, deployment_id):
             helm_details['command']
         ]
         
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Command: {' '.join(cmd)}")
+        log_message(deployment_id, f"Command: {' '.join(cmd)}")
         
         try:
             # Use Popen for real-time output
@@ -415,23 +558,23 @@ def execute_helm_upgrade(step, deployment_id):
                 if output == '' and process.poll() is not None:
                     break
                 if output:
-                    deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] {output.strip()}")
+                    log_message(deployment_id, output.strip())
             
             rc = process.poll()
             
             if rc == 0:
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully performed Helm upgrade for: {deployment_type}")
+                log_message(deployment_id, f"Successfully performed Helm upgrade for: {deployment_type}")
                 return True
             else:
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Helm upgrade failed with return code: {rc}")
+                log_message(deployment_id, f"ERROR: Helm upgrade failed with return code: {rc}")
                 return False
                 
         except Exception as e:
-            deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
+            log_message(deployment_id, f"ERROR: {str(e)}")
             return False
         
     except Exception as e:
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR in Helm upgrade: {str(e)}")
+        log_message(deployment_id, f"ERROR in Helm upgrade: {str(e)}")
         return False
 
 def run_template_deployment(deployment_id, template, ft_number):
@@ -442,12 +585,12 @@ def run_template_deployment(deployment_id, template, ft_number):
     
     try:
         deployment['status'] = 'running'
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Starting template deployment for {ft_number}")
+        log_message(deployment_id, f"Starting template deployment for {ft_number}")
         
         steps = template.get('steps', [])
         total_steps = len(steps)
         
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Total steps to execute: {total_steps}")
+        log_message(deployment_id, f"Total steps to execute: {total_steps}")
         
         # Execute steps in order
         for step in sorted(steps, key=lambda x: x.get('order', 0)):
@@ -457,19 +600,19 @@ def run_template_deployment(deployment_id, template, ft_number):
             success = execute_deployment_step(step, deployment_id, ft_number)
             if not success:
                 deployment['status'] = 'failed'
-                deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Deployment failed at step {step.get('order')}")
+                log_message(deployment_id, f"Deployment failed at step {step.get('order')}")
                 save_deployment_logs(deployment_id, deployment, ft_number)
                 return
         
         deployment['status'] = 'success'
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] Template deployment completed successfully")
+        log_message(deployment_id, f"Template deployment completed successfully")
         
         # Save logs to deployment history
         save_deployment_logs(deployment_id, deployment, ft_number)
         
     except Exception as e:
         deployment['status'] = 'failed'
-        deployment['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
+        log_message(deployment_id, f"ERROR: {str(e)}")
         save_deployment_logs(deployment_id, deployment, ft_number)
 
 def save_deployment_logs(deployment_id, deployment, ft_number):
@@ -622,5 +765,5 @@ def get_db_inventory():
         
         return jsonify(db_inventory)
         
-    except Exception e:
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
