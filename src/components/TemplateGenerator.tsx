@@ -941,7 +941,6 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
             </Button>
           </CardContent>
         </Card>
-
         {/* Generated Template Display/Edit - This will now match the height of the logs */}
         {generatedTemplate && (
           <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex-1 flex flex-col min-h-0">
@@ -968,16 +967,16 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col min-h-0 p-4">
+            <CardContent className="p-4">
               {isEditing ? (
                 <Textarea
                   value={editableTemplate}
                   onChange={(e) => setEditableTemplate(e.target.value)}
-                  className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 font-mono text-xs flex-1 resize-none min-h-0"
+                  className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 font-mono text-xs resize-none w-full h-96"
                 />
               ) : (
-                <div className="flex-1 min-h-0 bg-[#2A4759] rounded-md overflow-hidden">
-                  <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap p-4 h-full overflow-y-auto">
+                <div className="bg-[#2A4759] rounded-md h-96 overflow-y-auto">
+                  <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap p-4">
                     {JSON.stringify(generatedTemplate, null, 2)}
                   </pre>
                 </div>
