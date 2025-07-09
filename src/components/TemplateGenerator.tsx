@@ -846,98 +846,98 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
             )}
 
             {/* Step Form */}
-        <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex flex-col max-h-[800px]">
-          <CardHeader className="flex-shrink-0">
-            <CardTitle className="text-[#F79B72]">Deployment Steps</CardTitle>
-            <CardDescription className="text-[#EEEEEE]/70">
-              Current Steps:
-            </CardDescription>
-          </CardHeader>
+            <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex flex-col max-h-[800px]">
+            <CardHeader className="flex-shrink-0">
+              <CardTitle className="text-[#F79B72]">Deployment Steps</CardTitle>
+              <CardDescription className="text-[#EEEEEE]/70">
+                Current Steps:
+              </CardDescription>
+            </CardHeader>
           
-          <CardContent className="flex-1 flex flex-col min-h-0 space-y-4">
-            {/* Steps List - Scrollable */}
-            <div className="flex-1 overflow-y-auto min-h-0 space-y-2 pr-2">
-              {steps.map((step, index) => (
-                <div key={step.id} className="bg-[#2A4759] p-4 rounded-lg">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-[#EEEEEE]">
-                        Step {index + 1}: {step.type}
-                      </h4>
-                      <p className="text-[#EEEEEE]/70 text-sm mt-1">
-                        {step.description}
-                      </p>
-                      <p className="text-[#F79B72] text-sm mt-2">
-                        FT: {step.ftNumber}
-                      </p>
-                    </div>
-                    <div className="flex space-x-2 ml-4">
-                      <Button
-                        onClick={() => editStep(step.id)}
-                        size="sm"
-                        variant="outline"
-                        className="border-[#EEEEEE]/30 text-[#EEEEEE] hover:bg-[#EEEEEE]/10"
-                      >
-                        <Edit size={16} />
-                      </Button>
-                      <Button
-                        onClick={() => deleteStep(step.id)}
-                        size="sm"
-                        variant="outline"
-                        className="border-red-400 text-red-400 hover:bg-red-400/10"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
+            <CardContent className="flex-1 flex flex-col min-h-0 space-y-4">
+              {/* Steps List - Scrollable */}
+              <div className="flex-1 overflow-y-auto min-h-0 space-y-2 pr-2">
+                {steps.map((step, index) => (
+                  <div key={step.id} className="bg-[#2A4759] p-4 rounded-lg">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-[#EEEEEE]">
+                          Step {index + 1}: {step.type}
+                        </h4>
+                        <p className="text-[#EEEEEE]/70 text-sm mt-1">
+                          {step.description}
+                        </p>
+                        <p className="text-[#F79B72] text-sm mt-2">
+                          FT: {step.ftNumber}
+                        </p>
+                      </div>
+                      <div className="flex space-x-2 ml-4">
+                        <Button
+                          onClick={() => editStep(step.id)}
+                          size="sm"
+                          variant="outline"
+                          className="border-[#EEEEEE]/30 text-[#EEEEEE] hover:bg-[#EEEEEE]/10"
+                        >
+                          <Edit size={16} />
+                        </Button>
+                        <Button
+                          onClick={() => deleteStep(step.id)}
+                          size="sm"
+                          variant="outline"
+                          className="border-red-400 text-red-400 hover:bg-red-400/10"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Add/Edit Step Form - Fixed at bottom */}
-            <div className="flex-shrink-0 border-t border-[#EEEEEE]/20 pt-4 space-y-4">
-              <Label className="text-[#F79B72]">
-                {isEditingStep ? 'Edit Step' : 'Add New Step'}
-              </Label>
-
-              {renderStepForm()}
-
-              <div className="flex space-x-2">
-                <Button
-                  onClick={isEditingStep ? updateStep : addStep}
-                  className="bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
-                >
-                  <Plus size={16} className="mr-2" />
-                  {isEditingStep ? 'Update Step' : 'Add Step'}
-                </Button>
-                {isEditingStep && (
-                  <Button
-                    onClick={() => {
-                      setIsEditingStep(false);
-                      setEditingStepId(null);
-                      resetStepForm();
-                    }}
-                    variant="outline"
-                    className="border-[#EEEEEE]/30 text-[#EEEEEE]"
-                  >
-                    Cancel
-                  </Button>
-                )}
+                ))}
               </div>
-            </div>
 
-            {/* Generate Template Button - Always visible */}
-            <div className="flex-shrink-0">
-              <Button
-                onClick={generateTemplate}
-                disabled={!selectedFt || steps.length === 0}
-                className="w-full bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
-              >
-                Generate Template
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              {/* Add/Edit Step Form - Fixed at bottom */}
+              <div className="flex-shrink-0 border-t border-[#EEEEEE]/20 pt-4 space-y-4">
+                <Label className="text-[#F79B72]">
+                  {isEditingStep ? 'Edit Step' : 'Add New Step'}
+                </Label>
+
+                {renderStepForm()}
+
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={isEditingStep ? updateStep : addStep}
+                    className="bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
+                  >
+                    <Plus size={16} className="mr-2" />
+                    {isEditingStep ? 'Update Step' : 'Add Step'}
+                  </Button>
+                  {isEditingStep && (
+                    <Button
+                      onClick={() => {
+                        setIsEditingStep(false);
+                        setEditingStepId(null);
+                        resetStepForm();
+                      }}
+                      variant="outline"
+                      className="border-[#EEEEEE]/30 text-[#EEEEEE]"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Generate Template Button - Always visible */}
+              <div className="flex-shrink-0">
+                <Button
+                  onClick={generateTemplate}
+                  disabled={!selectedFt || steps.length === 0}
+                  className="w-full bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
+                >
+                  Generate Template
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
         {/* Template Generation Logs - At Bottom Left */}
         <div className="flex-shrink-0">
