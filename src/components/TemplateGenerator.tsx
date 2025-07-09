@@ -967,15 +967,15 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col p-4">
+            <CardContent className="flex-1 flex flex-col p-4 min-h-0">
               {isEditing ? (
                 <Textarea
                   value={editableTemplate}
                   onChange={(e) => setEditableTemplate(e.target.value)}
-                  className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 font-mono text-xs resize-none w-full flex-1"
+                  className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 font-mono text-xs resize-none w-full flex-1 min-h-0"
                 />
               ) : (
-                <div className="bg-[#2A4759] rounded-md flex-1 overflow-y-auto">
+                <div className="bg-[#2A4759] rounded-md flex-1 overflow-y-auto min-h-0">
                   <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap p-4">
                     {JSON.stringify(generatedTemplate, null, 2)}
                   </pre>
