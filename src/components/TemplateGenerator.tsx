@@ -943,7 +943,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         </Card>
         {/* Generated Template Display/Edit - This will now match the height of the logs */}
         {generatedTemplate && (
-          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex flex-col max-h-[630px] min-h-[400px]">
+          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex flex-col max-h-[700px] min-h-[400px]">
             <CardHeader className="flex-shrink-0">
               <CardTitle className="text-[#F79B72] flex justify-between items-center">
                 Generated Template
