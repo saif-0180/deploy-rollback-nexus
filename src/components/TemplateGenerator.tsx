@@ -888,7 +888,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         </Card>
 
         {/* Template Generation Logs - At Bottom Left */}
-        <div className="flex-shrink-0">
+        {/* <div className="flex-shrink-0">
           <LogDisplay
             logs={logs}
             height="300px"
@@ -896,7 +896,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
             title="Template Generation Logs"
             status="idle"
           />
-        </div>
+        </div> */}
       </div>
 
       {/* Right Column - Saved Templates and Generated Template */}
