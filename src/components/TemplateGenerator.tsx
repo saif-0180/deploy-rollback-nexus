@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
-import { Trash2, Plus, Edit3 } from "lucide-react";
+import { Trash2, Plus, Edit3, Download, RefreshCw } from "lucide-react";
 import VMSelector from './VMSelector';
 import LogDisplay from './LogDisplay';
 
@@ -25,7 +24,6 @@ interface DeploymentStep {
   targetPath?: string;
   dbConnection?: string;
   dbUser?: string;
-  dbName?: string;
   dbPassword?: string;
   service?: string;
   operation?: string;
@@ -46,6 +44,8 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   const [editableTemplate, setEditableTemplate] = useState<string>('');
   const [logs, setLogs] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [savedTemplates, setSavedTemplates] = useState<string[]>([]);
+  const [selectedSavedTemplate, setSelectedSavedTemplate] = useState<string>("");
   const { toast } = useToast();
 
   // Step form state
@@ -75,6 +75,23 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
       return response.json();
     },
   });
+
+  // Fetch saved templates
+  const { data: savedTemplatesData, refetch: refetchSavedTemplates } = useQuery({
+    queryKey: ['saved-templates'],
+    queryFn: async () => {
+      const response = await fetch('/api/templates/list');
+      if (!response.ok) throw new Error('Failed to fetch saved templates');
+      return response.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  useEffect(() => {
+    if (savedTemplatesData) {
+      setSavedTemplates(savedTemplatesData);
+    }
+  }, [savedTemplatesData]);
 
   // Fetch files for step FT
   const { data: stepFtFiles = [] } = useQuery({
@@ -165,6 +182,44 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         ? [...prev, fileName]
         : prev.filter(f => f !== fileName)
     );
+  };
+
+  const loadSavedTemplate = async () => {
+    if (!selectedSavedTemplate) {
+      toast({
+        title: "Error",
+        description: "Please select a template to load",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/templates/${selectedSavedTemplate}`);
+      if (!response.ok) throw new Error('Failed to load template');
+      
+      const template = await response.json();
+      setGeneratedTemplate(template);
+      setEditableTemplate(JSON.stringify(template, null, 2));
+      
+      // Extract FT number from template
+      if (template.metadata?.ft_number) {
+        setSelectedFt(template.metadata.ft_number);
+      }
+      
+      addLog(`Loaded saved template: ${selectedSavedTemplate}`);
+      toast({
+        title: "Success",
+        description: `Template ${selectedSavedTemplate} loaded successfully`,
+      });
+    } catch (error) {
+      addLog(`Error loading template: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast({
+        title: "Error",
+        description: `Failed to load template: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
+    }
   };
 
   const addStep = () => {
@@ -439,6 +494,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
           description: `Template for ${selectedFt} saved successfully`,
         });
         setIsEditing(false);
+        refetchSavedTemplates();
       } else {
         throw new Error('Failed to save template');
       }
@@ -527,21 +583,27 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                   <SelectValue placeholder="Select Target User" />
                 </SelectTrigger>
                 <SelectContent>
-                  {targetUsers.map((user: string) => (
-                    <SelectItem key={user} value={user}>{user}</SelectItem>
-                  ))}
+                  <SelectItem value="infadm">infadm</SelectItem>
+                  <SelectItem value="abpwrk1">abpwrk1</SelectItem>
+                  <SelectItem value="admin">admin</SelectItem>
+                  <SelectItem value="root">root</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div>
               <Label className="text-[#F79B72]">Target Path</Label>
-              <Input
-                value={stepTargetPath}
-                onChange={(e) => setStepTargetPath(e.target.value)}
-                placeholder="/home/users/abpwrk1/pbin/app"
-                className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30"
-              />
+              <Select value={stepTargetPath} onValueChange={setStepTargetPath}>
+                <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                  <SelectValue placeholder="Select Target Path" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="/home/users/abpwrk1/pbin/app">/home/users/abpwrk1/pbin/app</SelectItem>
+                  <SelectItem value="/home/users/infadm/bin">/home/users/infadm/bin</SelectItem>
+                  <SelectItem value="/opt/app">/opt/app</SelectItem>
+                  <SelectItem value="/tmp">/tmp</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
@@ -716,7 +778,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
       <h2 className="text-2xl font-bold text-[#F79B72] mb-4">AI Template Generator</h2>
       
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Left Column - Form and Generated Template */}
+        {/* Left Column - Form and Logs */}
         <div className="space-y-6">
           {/* Main FT Selection */}
           <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
@@ -822,7 +884,60 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
             </CardContent>
           </Card>
 
-          {/* Template Display/Edit */}
+          {/* Template Generation Logs - At Bottom Left */}
+          <LogDisplay
+            logs={logs}
+            height="300px"
+            fixedHeight={true}
+            title="Template Generation Logs"
+            status="idle"
+          />
+        </div>
+
+        {/* Right Column - Saved Templates and Generated Template */}
+        <div className="space-y-6">
+          {/* Load Saved Templates */}
+          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
+            <CardHeader>
+              <CardTitle className="text-[#F79B72] flex justify-between items-center">
+                Load Saved Templates
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => refetchSavedTemplates()}
+                  className="border-[#F79B72] text-[#F79B72] hover:bg-[#F79B72]/10"
+                >
+                  <RefreshCw size={14} />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-[#F79B72]">Available Templates</Label>
+                <Select value={selectedSavedTemplate} onValueChange={setSelectedSavedTemplate}>
+                  <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                    <SelectValue placeholder="Select a saved template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedTemplates.map((template: string) => (
+                      <SelectItem key={template} value={template}>{template}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                onClick={loadSavedTemplate}
+                disabled={!selectedSavedTemplate}
+                className="w-full bg-[#2A4759] text-[#EEEEEE] hover:bg-[#2A4759]/80 border-[#EEEEEE]/30"
+              >
+                <Download size={16} className="mr-2" />
+                Load Template
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Generated Template Display/Edit */}
           {generatedTemplate && (
             <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
               <CardHeader>
@@ -853,28 +968,17 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                   <Textarea
                     value={editableTemplate}
                     onChange={(e) => setEditableTemplate(e.target.value)}
-                    className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 min-h-[300px] font-mono text-xs"
-                    rows={15}
+                    className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 min-h-[400px] font-mono text-xs"
+                    rows={20}
                   />
                 ) : (
-                  <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap overflow-x-auto bg-[#2A4759] p-4 rounded-md max-h-[300px] overflow-y-auto">
+                  <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap overflow-x-auto bg-[#2A4759] p-4 rounded-md max-h-[400px] overflow-y-auto">
                     {JSON.stringify(generatedTemplate, null, 2)}
                   </pre>
                 )}
               </CardContent>
             </Card>
           )}
-        </div>
-
-        {/* Right Column - Logs at Bottom */}
-        <div>
-          <LogDisplay
-            logs={logs}
-            height="838px"
-            fixedHeight={true}
-            title="Template Generation Logs"
-            status="idle"
-          />
         </div>
       </div>
     </div>
