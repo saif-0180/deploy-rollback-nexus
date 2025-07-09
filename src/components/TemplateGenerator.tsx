@@ -943,7 +943,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         </Card>
         {/* Generated Template Display/Edit - This will now match the height of the logs */}
         {generatedTemplate && (
-          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex flex-col h-[calc(100vh-200px)]">
+          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex flex-col max-h-[600px] min-h-[400px]">
             <CardHeader className="flex-shrink-0">
               <CardTitle className="text-[#F79B72] flex justify-between items-center">
                 Generated Template
@@ -967,7 +967,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 p-4 overflow-hidden">
+            <CardContent className="flex-1 p-4 overflow-hidden min-h-0">
               {isEditing ? (
                 <Textarea
                   value={editableTemplate}
