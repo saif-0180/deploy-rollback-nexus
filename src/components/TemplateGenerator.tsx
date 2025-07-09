@@ -943,7 +943,7 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
         </Card>
         {/* Generated Template Display/Edit - This will now match the height of the logs */}
         {generatedTemplate && (
-          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex-1 flex flex-col">
+          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex-1 flex flex-col min-h-0">
             <CardHeader className="flex-shrink-0">
               <CardTitle className="text-[#F79B72] flex justify-between items-center">
                 Generated Template
@@ -967,15 +967,15 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col p-4 min-h-0">
+            <CardContent className="p-4">
               {isEditing ? (
                 <Textarea
                   value={editableTemplate}
                   onChange={(e) => setEditableTemplate(e.target.value)}
-                  className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 font-mono text-xs resize-none w-full flex-1 min-h-0"
+                  className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 font-mono text-xs resize-none w-full h-96"
                 />
               ) : (
-                <div className="bg-[#2A4759] rounded-md flex-1 overflow-y-auto min-h-0">
+                <div className="bg-[#2A4759] rounded-md h-96 overflow-y-auto">
                   <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap p-4">
                     {JSON.stringify(generatedTemplate, null, 2)}
                   </pre>
