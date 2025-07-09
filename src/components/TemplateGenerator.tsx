@@ -774,44 +774,46 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-[#F79B72] mb-4">AI Template Generator</h2>
-      
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Left Column - Form and Logs */}
-        <div className="space-y-6">
-          {/* Main FT Selection */}
-          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
-            <CardHeader>
-              <CardTitle className="text-[#F79B72]">Template Configuration</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="main-ft-select" className="text-[#F79B72]">Select FT Number for Template</Label>
-                <Select value={selectedFt} onValueChange={setSelectedFt}>
-                  <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
-                    <SelectValue placeholder={isLoadingFts ? "Loading..." : "Select FT"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fts.map((ft: string) => (
-                      <SelectItem key={ft} value={ft}>{ft}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+    <div className="min-h-screen bg-[#0f1419] p-4">
+  <div className="max-w-7xl mx-auto space-y-6">
+    <h2 className="text-2xl font-bold text-[#F79B72] mb-4">AI Template Generator</h2>
+    
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-0">
+      {/* Left Column - Form and Logs */}
+      <div className="space-y-6 flex flex-col">
+        {/* Main FT Selection */}
+        <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
+          <CardHeader>
+            <CardTitle className="text-[#F79B72]">Template Configuration</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="main-ft-select" className="text-[#F79B72]">Select FT Number for Template</Label>
+              <Select value={selectedFt} onValueChange={setSelectedFt}>
+                <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                  <SelectValue placeholder={isLoadingFts ? "Loading..." : "Select FT"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {fts.map((ft: string) => (
+                    <SelectItem key={ft} value={ft}>{ft}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Steps Management */}
-          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
-            <CardHeader>
-              <CardTitle className="text-[#F79B72]">Deployment Steps</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Current Steps List */}
-              {steps.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-[#F79B72]">Current Steps:</Label>
+        {/* Steps Management */}
+        <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex-1">
+          <CardHeader>
+            <CardTitle className="text-[#F79B72]">Deployment Steps</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 h-full flex flex-col">
+            {/* Current Steps List */}
+            {steps.length > 0 && (
+              <div className="space-y-2 flex-1 overflow-y-auto">
+                <Label className="text-[#F79B72]">Current Steps:</Label>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
                   {steps.map((step) => (
                     <div key={step.id} className="flex items-center justify-between bg-[#2A4759]/50 p-3 rounded-md">
                       <div className="flex-1">
@@ -840,51 +842,53 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
                     </div>
                   ))}
                 </div>
-              )}
-
-              {/* Step Form */}
-              <div className="border-t border-[#EEEEEE]/20 pt-4 space-y-4">
-                <Label className="text-[#F79B72]">
-                  {isEditingStep ? 'Edit Step' : 'Add New Step'}
-                </Label>
-
-                {renderStepForm()}
-
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={isEditingStep ? updateStep : addStep}
-                    className="bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
-                  >
-                    <Plus size={16} className="mr-2" />
-                    {isEditingStep ? 'Update Step' : 'Add Step'}
-                  </Button>
-                  {isEditingStep && (
-                    <Button
-                      onClick={() => {
-                        setIsEditingStep(false);
-                        setEditingStepId(null);
-                        resetStepForm();
-                      }}
-                      variant="outline"
-                      className="border-[#EEEEEE]/30 text-[#EEEEEE]"
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                </div>
               </div>
+            )}
 
-              <Button
-                onClick={generateTemplate}
-                disabled={!selectedFt || steps.length === 0}
-                className="w-full bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
-              >
-                Generate Template
-              </Button>
-            </CardContent>
-          </Card>
+            {/* Step Form */}
+            <div className="border-t border-[#EEEEEE]/20 pt-4 space-y-4">
+              <Label className="text-[#F79B72]">
+                {isEditingStep ? 'Edit Step' : 'Add New Step'}
+              </Label>
 
-          {/* Template Generation Logs - At Bottom Left */}
+              {renderStepForm()}
+
+              <div className="flex space-x-2">
+                <Button
+                  onClick={isEditingStep ? updateStep : addStep}
+                  className="bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
+                >
+                  <Plus size={16} className="mr-2" />
+                  {isEditingStep ? 'Update Step' : 'Add Step'}
+                </Button>
+                {isEditingStep && (
+                  <Button
+                    onClick={() => {
+                      setIsEditingStep(false);
+                      setEditingStepId(null);
+                      resetStepForm();
+                    }}
+                    variant="outline"
+                    className="border-[#EEEEEE]/30 text-[#EEEEEE]"
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <Button
+              onClick={generateTemplate}
+              disabled={!selectedFt || steps.length === 0}
+              className="w-full bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
+            >
+              Generate Template
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Template Generation Logs - At Bottom Left */}
+        <div className="flex-shrink-0">
           <LogDisplay
             logs={logs}
             height="300px"
@@ -893,95 +897,306 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ onTemplateGenerat
             status="idle"
           />
         </div>
+      </div>
 
-        {/* Right Column - Saved Templates and Generated Template */}
-        <div className="space-y-6">
-          {/* Load Saved Templates */}
-          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
-            <CardHeader>
+      {/* Right Column - Saved Templates and Generated Template */}
+      <div className="space-y-6 flex flex-col min-h-0">
+        {/* Load Saved Templates */}
+        <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex-shrink-0">
+          <CardHeader>
+            <CardTitle className="text-[#F79B72] flex justify-between items-center">
+              Load Saved Templates
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => refetchSavedTemplates()}
+                className="border-[#F79B72] text-[#F79B72] hover:bg-[#F79B72]/10"
+              >
+                <RefreshCw size={14} />
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label className="text-[#F79B72]">Available Templates</Label>
+              <Select value={selectedSavedTemplate} onValueChange={setSelectedSavedTemplate}>
+                <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                  <SelectValue placeholder="Select a saved template" />
+                </SelectTrigger>
+                <SelectContent>
+                  {savedTemplates.map((template: string) => (
+                    <SelectItem key={template} value={template}>{template}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              onClick={loadSavedTemplate}
+              disabled={!selectedSavedTemplate}
+              className="w-full bg-[#2A4759] text-[#EEEEEE] hover:bg-[#2A4759]/80 border-[#EEEEEE]/30"
+            >
+              <Download size={16} className="mr-2" />
+              Load Template
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Generated Template Display/Edit - This will now match the height of the logs */}
+        {generatedTemplate && (
+          <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30 flex-1 flex flex-col min-h-0">
+            <CardHeader className="flex-shrink-0">
               <CardTitle className="text-[#F79B72] flex justify-between items-center">
-                Load Saved Templates
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => refetchSavedTemplates()}
-                  className="border-[#F79B72] text-[#F79B72] hover:bg-[#F79B72]/10"
-                >
-                  <RefreshCw size={14} />
-                </Button>
+                Generated Template
+                <div className="space-x-2">
+                  <Button
+                    onClick={() => setIsEditing(!isEditing)}
+                    size="sm"
+                    variant="outline"
+                    className="border-[#F79B72] text-[#F79B72] hover:bg-[#F79B72]/10"
+                  >
+                    {isEditing ? "Cancel Edit" : "Edit"}
+                  </Button>
+                  <Button
+                    onClick={saveTemplate}
+                    disabled={isSaving}
+                    size="sm"
+                    className="bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
+                  >
+                    {isSaving ? "Saving..." : "Save Template"}
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label className="text-[#F79B72]">Available Templates</Label>
-                <Select value={selectedSavedTemplate} onValueChange={setSelectedSavedTemplate}>
-                  <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
-                    <SelectValue placeholder="Select a saved template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {savedTemplates.map((template: string) => (
-                      <SelectItem key={template} value={template}>{template}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button
-                onClick={loadSavedTemplate}
-                disabled={!selectedSavedTemplate}
-                className="w-full bg-[#2A4759] text-[#EEEEEE] hover:bg-[#2A4759]/80 border-[#EEEEEE]/30"
-              >
-                <Download size={16} className="mr-2" />
-                Load Template
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Generated Template Display/Edit */}
-          {generatedTemplate && (
-            <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
-              <CardHeader>
-                <CardTitle className="text-[#F79B72] flex justify-between items-center">
-                  Generated Template
-                  <div className="space-x-2">
-                    <Button
-                      onClick={() => setIsEditing(!isEditing)}
-                      size="sm"
-                      variant="outline"
-                      className="border-[#F79B72] text-[#F79B72] hover:bg-[#F79B72]/10"
-                    >
-                      {isEditing ? "Cancel Edit" : "Edit"}
-                    </Button>
-                    <Button
-                      onClick={saveTemplate}
-                      disabled={isSaving}
-                      size="sm"
-                      className="bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
-                    >
-                      {isSaving ? "Saving..." : "Save Template"}
-                    </Button>
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isEditing ? (
-                  <Textarea
-                    value={editableTemplate}
-                    onChange={(e) => setEditableTemplate(e.target.value)}
-                    className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 min-h-[400px] font-mono text-xs"
-                    rows={20}
-                  />
-                ) : (
-                  <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap overflow-x-auto bg-[#2A4759] p-4 rounded-md max-h-[400px] overflow-y-auto">
+            <CardContent className="flex-1 flex flex-col min-h-0">
+              {isEditing ? (
+                <Textarea
+                  value={editableTemplate}
+                  onChange={(e) => setEditableTemplate(e.target.value)}
+                  className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 font-mono text-xs flex-1 resize-none"
+                />
+              ) : (
+                <div className="flex-1 overflow-hidden">
+                  <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap bg-[#2A4759] p-4 rounded-md h-full overflow-y-auto">
                     {JSON.stringify(generatedTemplate, null, 2)}
                   </pre>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
+  </div>
+</div>
+//     <div className="space-y-6">
+//       <h2 className="text-2xl font-bold text-[#F79B72] mb-4">AI Template Generator</h2>
+      
+//       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+//         {/* Left Column - Form and Logs */}
+//         <div className="space-y-6">
+//           {/* Main FT Selection */}
+//           <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
+//             <CardHeader>
+//               <CardTitle className="text-[#F79B72]">Template Configuration</CardTitle>
+//             </CardHeader>
+//             <CardContent className="space-y-4">
+//               <div>
+//                 <Label htmlFor="main-ft-select" className="text-[#F79B72]">Select FT Number for Template</Label>
+//                 <Select value={selectedFt} onValueChange={setSelectedFt}>
+//                   <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+//                     <SelectValue placeholder={isLoadingFts ? "Loading..." : "Select FT"} />
+//                   </SelectTrigger>
+//                   <SelectContent>
+//                     {fts.map((ft: string) => (
+//                       <SelectItem key={ft} value={ft}>{ft}</SelectItem>
+//                     ))}
+//                   </SelectContent>
+//                 </Select>
+//               </div>
+//             </CardContent>
+//           </Card>
+
+//           {/* Steps Management */}
+//           <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
+//             <CardHeader>
+//               <CardTitle className="text-[#F79B72]">Deployment Steps</CardTitle>
+//             </CardHeader>
+//             <CardContent className="space-y-4">
+//               {/* Current Steps List */}
+//               {steps.length > 0 && (
+//                 <div className="space-y-2">
+//                   <Label className="text-[#F79B72]">Current Steps:</Label>
+//                   {steps.map((step) => (
+//                     <div key={step.id} className="flex items-center justify-between bg-[#2A4759]/50 p-3 rounded-md">
+//                       <div className="flex-1">
+//                         <div className="text-sm font-medium">Step {step.order}: {step.type.replace(/_/g, ' ')}</div>
+//                         <div className="text-xs text-[#EEEEEE]/70">{step.description}</div>
+//                         {step.ftNumber && <div className="text-xs text-[#F79B72]">FT: {step.ftNumber}</div>}
+//                       </div>
+//                       <div className="flex space-x-2">
+//                         <Button
+//                           size="sm"
+//                           variant="outline"
+//                           onClick={() => editStep(step)}
+//                           className="border-[#F79B72] text-[#F79B72] hover:bg-[#F79B72]/10"
+//                         >
+//                           <Edit3 size={14} />
+//                         </Button>
+//                         <Button
+//                           size="sm"
+//                           variant="outline"
+//                           onClick={() => removeStep(step.id)}
+//                           className="border-red-500 text-red-500 hover:bg-red-500/10"
+//                         >
+//                           <Trash2 size={14} />
+//                         </Button>
+//                       </div>
+//                     </div>
+//                   ))}
+//                 </div>
+//               )}
+
+//               {/* Step Form */}
+//               <div className="border-t border-[#EEEEEE]/20 pt-4 space-y-4">
+//                 <Label className="text-[#F79B72]">
+//                   {isEditingStep ? 'Edit Step' : 'Add New Step'}
+//                 </Label>
+
+//                 {renderStepForm()}
+
+//                 <div className="flex space-x-2">
+//                   <Button
+//                     onClick={isEditingStep ? updateStep : addStep}
+//                     className="bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
+//                   >
+//                     <Plus size={16} className="mr-2" />
+//                     {isEditingStep ? 'Update Step' : 'Add Step'}
+//                   </Button>
+//                   {isEditingStep && (
+//                     <Button
+//                       onClick={() => {
+//                         setIsEditingStep(false);
+//                         setEditingStepId(null);
+//                         resetStepForm();
+//                       }}
+//                       variant="outline"
+//                       className="border-[#EEEEEE]/30 text-[#EEEEEE]"
+//                     >
+//                       Cancel
+//                     </Button>
+//                   )}
+//                 </div>
+//               </div>
+
+//               <Button
+//                 onClick={generateTemplate}
+//                 disabled={!selectedFt || steps.length === 0}
+//                 className="w-full bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
+//               >
+//                 Generate Template
+//               </Button>
+//             </CardContent>
+//           </Card>
+
+//           {/* Template Generation Logs - At Bottom Left */}
+//           <LogDisplay
+//             logs={logs}
+//             height="300px"
+//             fixedHeight={true}
+//             title="Template Generation Logs"
+//             status="idle"
+//           />
+//         </div>
+
+//         {/* Right Column - Saved Templates and Generated Template */}
+//         <div className="space-y-6">
+//           {/* Load Saved Templates */}
+//           <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
+//             <CardHeader>
+//               <CardTitle className="text-[#F79B72] flex justify-between items-center">
+//                 Load Saved Templates
+//                 <Button
+//                   size="sm"
+//                   variant="outline"
+//                   onClick={() => refetchSavedTemplates()}
+//                   className="border-[#F79B72] text-[#F79B72] hover:bg-[#F79B72]/10"
+//                 >
+//                   <RefreshCw size={14} />
+//                 </Button>
+//               </CardTitle>
+//             </CardHeader>
+//             <CardContent className="space-y-4">
+//               <div>
+//                 <Label className="text-[#F79B72]">Available Templates</Label>
+//                 <Select value={selectedSavedTemplate} onValueChange={setSelectedSavedTemplate}>
+//                   <SelectTrigger className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+//                     <SelectValue placeholder="Select a saved template" />
+//                   </SelectTrigger>
+//                   <SelectContent>
+//                     {savedTemplates.map((template: string) => (
+//                       <SelectItem key={template} value={template}>{template}</SelectItem>
+//                     ))}
+//                   </SelectContent>
+//                 </Select>
+//               </div>
+
+//               <Button
+//                 onClick={loadSavedTemplate}
+//                 disabled={!selectedSavedTemplate}
+//                 className="w-full bg-[#2A4759] text-[#EEEEEE] hover:bg-[#2A4759]/80 border-[#EEEEEE]/30"
+//               >
+//                 <Download size={16} className="mr-2" />
+//                 Load Template
+//               </Button>
+//             </CardContent>
+//           </Card>
+
+//           {/* Generated Template Display/Edit */}
+//           {generatedTemplate && (
+//             <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
+//               <CardHeader>
+//                 <CardTitle className="text-[#F79B72] flex justify-between items-center">
+//                   Generated Template
+//                   <div className="space-x-2">
+//                     <Button
+//                       onClick={() => setIsEditing(!isEditing)}
+//                       size="sm"
+//                       variant="outline"
+//                       className="border-[#F79B72] text-[#F79B72] hover:bg-[#F79B72]/10"
+//                     >
+//                       {isEditing ? "Cancel Edit" : "Edit"}
+//                     </Button>
+//                     <Button
+//                       onClick={saveTemplate}
+//                       disabled={isSaving}
+//                       size="sm"
+//                       className="bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
+//                     >
+//                       {isSaving ? "Saving..." : "Save Template"}
+//                     </Button>
+//                   </div>
+//                 </CardTitle>
+//               </CardHeader>
+//               <CardContent>
+//                 {isEditing ? (
+//                   <Textarea
+//                     value={editableTemplate}
+//                     onChange={(e) => setEditableTemplate(e.target.value)}
+//                     className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30 min-h-[400px] font-mono text-xs"
+//                     rows={20}
+//                   />
+//                 ) : (
+//                   <pre className="text-xs text-[#EEEEEE] whitespace-pre-wrap overflow-x-auto bg-[#2A4759] p-4 rounded-md max-h-[400px] overflow-y-auto">
+//                     {JSON.stringify(generatedTemplate, null, 2)}
+//                   </pre>
+//                 )}
+//               </CardContent>
+//             </Card>
+//           )}
+//         </div>
+//       </div>
+//     </div>
   );
 };
 
