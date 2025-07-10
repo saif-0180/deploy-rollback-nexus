@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,18 +14,6 @@ interface DeploymentStep {
   type: string;
   description: string;
   order: number;
-  ftNumber?: string;
-  files?: string[];
-  targetPath?: string;
-  targetUser?: string;
-  targetVMs?: string[];
-  dbConnection?: string;
-  dbUser?: string;
-  dbPassword?: string;
-  service?: string;
-  operation?: string;
-  playbook?: string;
-  helmDeploymentType?: string;
   [key: string]: any;
 }
 
@@ -33,7 +22,12 @@ interface DeploymentTemplate {
     ft_number: string;
     generated_at: string;
     description: string;
-    total_steps: number;
+    selectedFiles?: string[];
+    selectedVMs?: string[];
+    dbConnection?: string;
+    dbUser?: string;
+    targetUser?: string;
+    service?: string;
   };
   steps: DeploymentStep[];
   dependencies: Array<{
@@ -43,25 +37,13 @@ interface DeploymentTemplate {
   }>;
 }
 
-interface TemplateInfo {
-  name: string;
-  description: string;
-  ft_number: string;
-  total_steps: number;
-  steps: Array<{
-    order: number;
-    type: string;
-    description: string;
-  }>;
-}
-
 const DeployUsingTemplate: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
-  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [selectedFt, setSelectedFt] = useState('');
   const [loadedTemplate, setLoadedTemplate] = useState<DeploymentTemplate | null>(null);
   const [deploymentId, setDeploymentId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
-  const [deploymentStatus, setDeploymentStatus] = useState<'idle' | 'loading' | 'running' | 'completed' | 'failed'>('idle');
+  const [deploymentStatus, setDeploymentStatus] = useState<'idle' | 'loading' | 'running' | 'success' | 'failed'>('idle');
   const { toast } = useToast();
 
   // Check authentication
@@ -76,10 +58,10 @@ const DeployUsingTemplate: React.FC = () => {
   }, [isAuthenticated, toast]);
 
   // Fetch available templates
-  const { data: templatesData, isLoading: isLoadingTemplates } = useQuery({
+  const { data: availableTemplates = [], isLoading: isLoadingTemplates } = useQuery({
     queryKey: ['available-templates'],
     queryFn: async () => {
-      const response = await fetch('/api/templates');
+      const response = await fetch('/api/templates/list');
       if (!response.ok) {
         throw new Error('Failed to fetch templates');
       }
@@ -89,12 +71,10 @@ const DeployUsingTemplate: React.FC = () => {
     enabled: isAuthenticated,
   });
 
-  const availableTemplates = templatesData?.templates || [];
-
   // Load specific template
   const loadTemplateMutation = useMutation({
-    mutationFn: async (templateName: string) => {
-      const response = await fetch(`/api/template/${templateName}`);
+    mutationFn: async (ftNumber: string) => {
+      const response = await fetch(`/api/templates/${ftNumber}`);
       if (!response.ok) {
         throw new Error('Failed to load template');
       }
@@ -104,7 +84,7 @@ const DeployUsingTemplate: React.FC = () => {
       setLoadedTemplate(template);
       toast({
         title: "Success",
-        description: `Template ${selectedTemplate} loaded successfully`,
+        description: `Template for ${selectedFt} loaded successfully`,
       });
     },
     onError: (error) => {
@@ -118,14 +98,15 @@ const DeployUsingTemplate: React.FC = () => {
 
   // Deploy using template
   const deployMutation = useMutation({
-    mutationFn: async (templateName: string) => {
+    mutationFn: async (template: DeploymentTemplate) => {
       const response = await fetch('/api/deploy/template', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          template: templateName
+          ft_number: template.metadata.ft_number,
+          template: template
         }),
       });
       if (!response.ok) {
@@ -157,7 +138,7 @@ const DeployUsingTemplate: React.FC = () => {
     queryFn: async () => {
       if (!deploymentId) return { logs: [], status: 'idle' };
       
-      const response = await fetch(`/api/deploy/status/${deploymentId}`);
+      const response = await fetch(`/api/deploy/template/${deploymentId}/logs`);
       if (!response.ok) {
         throw new Error('Failed to fetch deployment logs');
       }
@@ -185,15 +166,15 @@ const DeployUsingTemplate: React.FC = () => {
       return;
     }
 
-    if (!selectedTemplate) {
+    if (!selectedFt) {
       toast({
         title: "Error",
-        description: "Please select a template",
+        description: "Please select an FT number",
         variant: "destructive",
       });
       return;
     }
-    loadTemplateMutation.mutate(selectedTemplate);
+    loadTemplateMutation.mutate(selectedFt);
   };
 
   const handleDeploy = () => {
@@ -206,37 +187,15 @@ const DeployUsingTemplate: React.FC = () => {
       return;
     }
 
-    if (!selectedTemplate) {
+    if (!loadedTemplate) {
       toast({
         title: "Error",
-        description: "Please select a template first",
+        description: "Please load a template first",
         variant: "destructive",
       });
       return;
     }
-    deployMutation.mutate(selectedTemplate);
-  };
-
-  const getStepTypeIcon = (type: string) => {
-    switch (type) {
-      case 'file_deployment': return '📁';
-      case 'sql_deployment': return '🗄️';
-      case 'service_restart': return '🔄';
-      case 'ansible_playbook': return '🎭';
-      case 'helm_upgrade': return '⚙️';
-      default: return '📋';
-    }
-  };
-
-  const getStepTypeLabel = (type: string) => {
-    switch (type) {
-      case 'file_deployment': return 'File Deployment';
-      case 'sql_deployment': return 'SQL Deployment';
-      case 'service_restart': return 'Service Management';
-      case 'ansible_playbook': return 'Ansible Playbook';
-      case 'helm_upgrade': return 'Helm Upgrade';
-      default: return type;
-    }
+    deployMutation.mutate(loadedTemplate);
   };
 
   if (!isAuthenticated) {
@@ -260,16 +219,14 @@ const DeployUsingTemplate: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="template-select" className="text-[#F79B72]">Select Template</Label>
-                <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                  <SelectTrigger id="template-select" className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
-                    <SelectValue placeholder={isLoadingTemplates ? "Loading..." : "Select a template"} />
+                <Label htmlFor="ft-select" className="text-[#F79B72]">Select FT</Label>
+                <Select value={selectedFt} onValueChange={setSelectedFt}>
+                  <SelectTrigger id="ft-select" className="bg-[#2A4759] text-[#EEEEEE] border-[#EEEEEE]/30">
+                    <SelectValue placeholder={isLoadingTemplates ? "Loading..." : "Select an FT"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableTemplates.map((template: TemplateInfo) => (
-                      <SelectItem key={template.name} value={template.name}>
-                        {template.ft_number} - {template.description}
-                      </SelectItem>
+                    {availableTemplates.map((ft: string) => (
+                      <SelectItem key={ft} value={ft}>{ft}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -277,7 +234,7 @@ const DeployUsingTemplate: React.FC = () => {
 
               <Button
                 onClick={handleLoadTemplate}
-                disabled={!selectedTemplate || loadTemplateMutation.isPending}
+                disabled={!selectedFt || loadTemplateMutation.isPending}
                 className="w-full bg-[#2A4759] text-[#EEEEEE] hover:bg-[#2A4759]/80 border-[#EEEEEE]/30"
               >
                 {loadTemplateMutation.isPending ? "Loading Template..." : "Load Template"}
@@ -289,8 +246,13 @@ const DeployUsingTemplate: React.FC = () => {
                   <div className="text-sm text-[#EEEEEE] space-y-1">
                     <div>FT: {loadedTemplate.metadata.ft_number}</div>
                     <div>Steps: {loadedTemplate.steps.length}</div>
-                    <div>Description: {loadedTemplate.metadata.description}</div>
                     <div>Generated: {new Date(loadedTemplate.metadata.generated_at).toLocaleString()}</div>
+                    {loadedTemplate.metadata.selectedVMs && (
+                      <div>VMs: {loadedTemplate.metadata.selectedVMs.join(', ')}</div>
+                    )}
+                    {loadedTemplate.metadata.targetUser && (
+                      <div>Target User: {loadedTemplate.metadata.targetUser}</div>
+                    )}
                     {user && (
                       <div>User: {user.username} ({user.role})</div>
                     )}
@@ -300,58 +262,13 @@ const DeployUsingTemplate: React.FC = () => {
 
               <Button
                 onClick={handleDeploy}
-                disabled={!selectedTemplate || deployMutation.isPending || deploymentStatus === 'running'}
+                disabled={!loadedTemplate || deployMutation.isPending || deploymentStatus === 'running'}
                 className="w-full bg-[#F79B72] text-[#2A4759] hover:bg-[#F79B72]/80"
               >
                 {deployMutation.isPending || deploymentStatus === 'running' ? "Deploying..." : "Deploy"}
               </Button>
-
-              {deploymentId && (
-                <div className="mt-4 p-3 bg-[#2A4759]/50 rounded-md">
-                  <h4 className="text-[#F79B72] font-medium mb-2">Deployment Status</h4>
-                  <div className="text-sm text-[#EEEEEE] space-y-1">
-                    <div>ID: {deploymentId}</div>
-                    <div>Status: <span className={`capitalize ${
-                      deploymentStatus === 'completed' ? 'text-green-400' : 
-                      deploymentStatus === 'failed' ? 'text-red-400' :
-                      deploymentStatus === 'running' ? 'text-yellow-400' : 'text-gray-400'
-                    }`}>{deploymentStatus}</span></div>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
-
-          {/* Template Steps Preview */}
-          {loadedTemplate && (
-            <Card className="bg-[#1a2b42] text-[#EEEEEE] border-2 border-[#EEEEEE]/30">
-              <CardHeader>
-                <CardTitle className="text-[#F79B72]">Deployment Steps</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {loadedTemplate.steps
-                    .sort((a, b) => a.order - b.order)
-                    .map((step, index) => (
-                      <div key={step.order} className="flex items-center space-x-3 p-2 bg-[#2A4759]/30 rounded-md">
-                        <div className="flex-shrink-0 w-8 h-8 bg-[#F79B72] text-[#2A4759] rounded-full flex items-center justify-center text-sm font-medium">
-                          {step.order}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-lg">{getStepTypeIcon(step.type)}</span>
-                            <span className="text-sm font-medium text-[#F79B72]">
-                              {getStepTypeLabel(step.type)}
-                            </span>
-                          </div>
-                          <p className="text-sm text-[#EEEEEE] truncate">{step.description}</p>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
 
         {/* Middle Column - Flowchart */}

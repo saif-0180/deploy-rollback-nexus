@@ -20,8 +20,7 @@ from routes.auth_routes import get_current_user
 # Import DB routes
 from routes.db_routes import db_routes
 from routes.template_routes import template_bp
-from routes.deploy_template import deploy_template_bp
-
+from routes.deploy_template import deploy_template_bp, load_template, TEMPLATE_DIR
 # Register the blueprint
 #app.register_blueprint(db_blueprint, url_prefix='/api')
 
@@ -356,56 +355,80 @@ def get_systemd_services():
 
 # New APIs for template generator and Oneclick deploy using template
 
-@app.route('/api/playbooks', methods=['GET'])
-def get_playbooks():
-    """Get playbooks from inventory"""
-    try:
-        inventory_path = '/app/inventory/inventory.json'
-        
-        if not os.path.exists(inventory_path):
-            return jsonify({'playbooks': []})
-        
-        with open(inventory_path, 'r') as f:
-            inventory = json.load(f)
-        
-        return jsonify({'playbooks': inventory.get('playbooks', [])})
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+@app.route('/api/deploy/template', methods=['POST'])
+def deploy_template_route():
+    """Deploy a template with multiple steps"""
+    # Get current authenticated user
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"error": "Authentication required"}), 401
 
-@app.route('/api/helm-upgrades', methods=['GET'])
-def get_helm_upgrades():
-    """Get helm upgrades from inventory"""
-    try:
-        inventory_path = '/app/inventory/inventory.json'
-        
-        if not os.path.exists(inventory_path):
-            return jsonify({'helm_upgrades': []})
-        
-        with open(inventory_path, 'r') as f:
-            inventory = json.load(f)
-        
-        return jsonify({'helm_upgrades': inventory.get('helm_upgrades', [])})
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    data = request.json
+    template_name = data.get('template')
 
-@app.route('/api/db-inventory', methods=['GET'])
-def get_db_inventory():
-    """Get database inventory"""
+    if not template_name:
+        return jsonify({"error": "Template name is required"}), 400
+
+    logger.info(f"Template deployment request received from {current_user['username']}: {template_name}")
+
     try:
-        db_inventory_path = '/app/inventory/db_inventory.json'
-        
-        if not os.path.exists(db_inventory_path):
-            return jsonify({'db_connections': [], 'db_users': []})
-        
-        with open(db_inventory_path, 'r') as f:
-            db_inventory = json.load(f)
-        
-        return jsonify(db_inventory)
-        
+        result, status_code = deploy_template(template_name, current_user)
+        return jsonify(result), status_code
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Template deployment error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/templates', methods=['GET'])
+def list_templates():
+    """List available deployment templates"""
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"error": "Authentication required"}), 401
+
+    try:
+        templates = []
+        if os.path.exists(TEMPLATE_DIR):
+            for file_name in os.listdir(TEMPLATE_DIR):
+                if file_name.endswith('.json'):
+                    try:
+                        template = load_template(file_name)
+                        templates.append({
+                            "name": file_name,
+                            "description": template.get('metadata', {}).get('description', ''),
+                            "ft_number": template.get('metadata', {}).get('ft_number', ''),
+                            "total_steps": template.get('metadata', {}).get('total_steps', len(template.get('steps', []))),
+                            "steps": [
+                                {
+                                    "order": step.get('order'),
+                                    "type": step.get('type'),
+                                    "description": step.get('description', '')
+                                } for step in template.get('steps', [])
+                            ]
+                        })
+                    except Exception as e:
+                        logger.warning(f"Failed to load template {file_name}: {str(e)}")
+                        continue
+
+        return jsonify({"templates": templates})
+    except Exception as e:
+        logger.error(f"Failed to list templates: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/template/<template_name>', methods=['GET'])
+def get_template_details(template_name):
+    """Get details of a specific template"""
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"error": "Authentication required"}), 401
+
+    try:
+        template = load_template(template_name)
+        return jsonify(template)
+    except Exception as e:
+        logger.error(f"Failed to get template details: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
 # End of template generator and onclick deploy using template
     
 # API to deploy a file
