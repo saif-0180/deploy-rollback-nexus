@@ -31,7 +31,7 @@ def log_message(deployment_id, message):
 
 def execute_template_step(step, deployment_id, ft_number, current_user):
     """Execute a template step using the main app's deployment system"""
-    from app import deployments, run_file_deployment, run_sql_deployment, run_systemd_deployment, run_shell_deployment
+    from app import deployments, run_file_deployment, run_sql_deployment, process_systemd_operation, run_shell_deployment
     
     deployment = deployments.get(deployment_id)
     if not deployment:
@@ -96,7 +96,7 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
                 'operation': operation,
                 'vms': target_vms
             }
-            return run_systemd_deployment(deployment_id, deployment_data, current_user)
+            return process_systemd_operation(deployment_id, deployment_data, current_user)
             
         elif step_type == 'ansible_playbook':
             # Execute Ansible playbook using shell command
