@@ -8,7 +8,7 @@ from datetime import datetime
 import subprocess
 import logging
 from routes.auth_routes import get_current_user
-from app import app, deployments, save_deployment_history, deploy_file, systemd_operation
+from app import deployments, save_deployment_history
 
 
 deploy_template_bp = Blueprint('deploy_template', __name__)
@@ -38,20 +38,19 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
 
             for file in files:
                 for vm in target_vms:
-                    with app.test_request_context(
-                        '/api/deploy/file',
-                        method='POST',
-                        json={
-                            'ft': ft_source,
-                            'file': file,
-                            'user': target_user,
-                            'targetPath': target_path,
-                            'vms': [vm],
-                            'sudo': False,
-                            'createBackup': True
-                        }
-                    ):
-                        response = deploy_file()
+                    with current_app.test_client() as client:
+                        response = client.post(
+                            "/api/deploy/file",
+                            json={
+                                'ft': ft_source,
+                                'file': file,
+                                'user': target_user,
+                                'targetPath': target_path,
+                                'vms': [vm],
+                                'sudo': False,
+                                'createBackup': True
+                            }
+                        )
                         if response.status_code != 200:
                             log_message(deployment_id, f"File deployment failed: {response.get_json()}")
                             return False
@@ -77,16 +76,15 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
             operation = step.get('operation', 'restart')
             target_vms = step.get('targetVMs', [])
 
-            with app.test_request_context(
-                f'/api/systemd/{operation}',
-                method='POST',
-                json={
-                    'service': service,
-                    'vms': target_vms,
-                    'operation': operation
-                }
-            ):
-                response = systemd_operation(operation)
+            with current_app.test_client() as client:
+                response = client.post(
+                    f"/api/systemd/{operation}",
+                    json={
+                        'service': service,
+                        'vms': target_vms,
+                        'operation': operation
+                    }
+                )
                 if response.status_code != 200:
                     log_message(deployment_id, f"Systemd operation failed: {response.get_json()}")
                     return False
@@ -223,4 +221,3 @@ def get_deployment_logs(deployment_id):
     except Exception as e:
         current_app.logger.error(f"Error getting deployment logs: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
