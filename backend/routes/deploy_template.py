@@ -9,6 +9,7 @@ from datetime import datetime
 import subprocess
 import logging
 import base64
+from routes.auth_routes import get_current_user
 
 deploy_template_bp = Blueprint('deploy_template', __name__)
 
@@ -31,7 +32,7 @@ def log_message(deployment_id, message):
 
 def execute_template_step(step, deployment_id, ft_number, current_user):
     """Execute a template step using the main app's deployment system"""
-    from app import deployments, run_file_deployment, run_sql_deployment, systemd_operation, run_shell_deployment
+    from app import deployments, run_file_deployment, run_sql_deployment, process_systemd_operation, run_shell_deployment
     
     deployment = deployments.get(deployment_id)
     if not deployment:
@@ -84,19 +85,81 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
                 if not success:
                     return False
             return True
-            
+
         elif step_type == 'service_restart':
-            # Convert template step to systemd operation format
+            # FIXED: Use process_systemd_operation directly instead of systemd_operation
             service = step.get('service', 'docker.service')
             operation = step.get('operation', 'restart')
             target_vms = step.get('targetVMs', [])
             
-            deployment_data = {
-                'service': service,
-                'operation': operation,
-                'vms': target_vms
+            # Create a new deployment ID for this systemd operation
+            systemd_deployment_id = str(uuid.uuid4())
+            
+            # Initialize systemd deployment tracking
+            deployments[systemd_deployment_id] = {
+                "id": systemd_deployment_id,
+                "type": "systemd",
+                "service": service,
+                "operation": operation,
+                "logged_in_user": current_user['username'],
+                "user_role": current_user.get('role', 'unknown'),
+                "vms": target_vms,
+                "status": "running",
+                "timestamp": time.time(),
+                "logs": []
             }
-            return systemd_operation(deployment_id, deployment_data, current_user)
+            
+            # Start systemd operation in a separate thread
+            systemd_thread = threading.Thread(
+                target=process_systemd_operation, 
+                args=(systemd_deployment_id, operation, service, target_vms)
+            )
+            systemd_thread.daemon = True
+            systemd_thread.start()
+            
+            # Wait for systemd operation to complete (with timeout)
+            timeout = 300  # 5 minutes timeout
+            start_time = time.time()
+            
+            while time.time() - start_time < timeout:
+                systemd_deployment = deployments.get(systemd_deployment_id)
+                if systemd_deployment and systemd_deployment['status'] in ['success', 'failed']:
+                    # Copy logs from systemd deployment to main deployment
+                    for log_entry in systemd_deployment['logs']:
+                        deployment['logs'].append(f"[SYSTEMD] {log_entry}")
+                    
+                    # Clean up systemd deployment
+                    del deployments[systemd_deployment_id]
+                    
+                    return systemd_deployment['status'] == 'success'
+                
+                time.sleep(2)  # Check every 2 seconds
+            
+            # Timeout occurred
+            log_message(deployment_id, f"Systemd operation timed out after {timeout} seconds")
+            return False
+            
+        else:
+            log_message(deployment_id, f"Unknown step type: {step_type}")
+            return False
+            
+    except Exception as e:
+        log_message(deployment_id, f"Error executing step: {str(e)}")
+        current_app.logger.error(f"Error in execute_template_step: {str(e)}")
+        return False
+            
+        # elif step_type == 'service_restart':
+        #     # Convert template step to systemd operation format
+        #     service = step.get('service', 'docker.service')
+        #     operation = step.get('operation', 'restart')
+        #     target_vms = step.get('targetVMs', [])
+            
+        #     deployment_data = {
+        #         'service': service,
+        #         'operation': operation,
+        #         'vms': target_vms
+        #     }
+        #     return systemd_operation(deployment_id, deployment_data, current_user)
             
         elif step_type == 'ansible_playbook':
             # Execute Ansible playbook using shell command
@@ -207,11 +270,67 @@ def run_template_deployment(deployment_id, template, ft_number):
         log_message(deployment_id, f"ERROR: {str(e)}")
         save_deployment_history()
 
+# @deploy_template_bp.route('/api/deploy/template', methods=['POST'])
+# def deploy_template():
+#     """Start a template deployment using main app's deployment system"""
+#     try:
+#         from app import deployments
+        
+#         current_user = get_current_user()
+#         if not current_user:
+#             return jsonify({'error': 'Authentication required'}), 401
+        
+#         data = request.get_json()
+#         ft_number = data.get('ft_number')
+#         template = data.get('template')
+        
+#         if not ft_number or not template:
+#             return jsonify({'error': 'Missing ft_number or template'}), 400
+        
+#         # Generate deployment ID
+#         deployment_id = str(uuid.uuid4())
+        
+#         # Initialize deployment tracking in main deployments dictionary
+#         deployments[deployment_id] = {
+#             'id': deployment_id,
+#             'type': 'template_deployment',
+#             'ft': ft_number,
+#             'status': 'running',
+#             'timestamp': time.time(),
+#             'logs': [],
+#             'orchestration_user': current_user['username'],
+#             'user_role': current_user.get('role', 'unknown'),
+#             'logged_in_user': current_user['username'],
+#             'logged_in_user_info': current_user,
+#             'template': template
+#         }
+        
+#         current_app.logger.info(f"Template deployment initiated by {current_user['username']} with ID: {deployment_id}")
+        
+#         # Start deployment in background thread
+#         deployment_thread = threading.Thread(
+#             target=run_template_deployment,
+#             args=(deployment_id, template, ft_number)
+#         )
+#         deployment_thread.daemon = True
+#         deployment_thread.start()
+        
+#         return jsonify({
+#             'deploymentId': deployment_id,
+#             'message': 'Template deployment started',
+#             'status': 'running',
+#             'initiatedBy': current_user['username']
+#         })
+        
+#     except Exception as e:
+#         current_app.logger.error(f"Error starting template deployment: {str(e)}")
+#         return jsonify({'error': str(e)}), 500
+
 @deploy_template_bp.route('/api/deploy/template', methods=['POST'])
 def deploy_template():
     """Start a template deployment using main app's deployment system"""
     try:
-        from app import deployments
+        from app import deployments, save_deployment_history
         
         current_user = get_current_user()
         if not current_user:
@@ -227,13 +346,16 @@ def deploy_template():
         # Generate deployment ID
         deployment_id = str(uuid.uuid4())
         
+        # FIXED: Use consistent timestamp format
+        current_timestamp = time.time()
+        
         # Initialize deployment tracking in main deployments dictionary
         deployments[deployment_id] = {
             'id': deployment_id,
             'type': 'template_deployment',
             'ft': ft_number,
             'status': 'running',
-            'timestamp': time.time(),
+            'timestamp': current_timestamp,
             'logs': [],
             'orchestration_user': current_user['username'],
             'user_role': current_user.get('role', 'unknown'),
@@ -241,6 +363,9 @@ def deploy_template():
             'logged_in_user_info': current_user,
             'template': template
         }
+        
+        # Save deployment history immediately
+        save_deployment_history()
         
         current_app.logger.info(f"Template deployment initiated by {current_user['username']} with ID: {deployment_id}")
         
@@ -263,6 +388,7 @@ def deploy_template():
         current_app.logger.error(f"Error starting template deployment: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+        
 @deploy_template_bp.route('/api/deploy/template/<deployment_id>/logs', methods=['GET'])
 def get_deployment_logs(deployment_id):
     """Get logs for a template deployment using main app's system"""
