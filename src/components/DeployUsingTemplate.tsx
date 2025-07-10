@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useAuth } from '@/contexts/AuthContext';
 import LogDisplay from './LogDisplay';
 import TemplateFlowchart from './TemplateFlowchart';
 
@@ -37,12 +38,24 @@ interface DeploymentTemplate {
 }
 
 const DeployUsingTemplate: React.FC = () => {
+  const { user, isAuthenticated } = useAuth();
   const [selectedFt, setSelectedFt] = useState('');
   const [loadedTemplate, setLoadedTemplate] = useState<DeploymentTemplate | null>(null);
   const [deploymentId, setDeploymentId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [deploymentStatus, setDeploymentStatus] = useState<'idle' | 'loading' | 'running' | 'success' | 'failed'>('idle');
   const { toast } = useToast();
+
+  // Check authentication
+  useEffect(() => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to access this feature",
+        variant: "destructive",
+      });
+    }
+  }, [isAuthenticated, toast]);
 
   // Fetch available templates
   const { data: availableTemplates = [], isLoading: isLoadingTemplates } = useQuery({
@@ -55,6 +68,7 @@ const DeployUsingTemplate: React.FC = () => {
       return response.json();
     },
     refetchInterval: 30000, // Refresh every 30 seconds
+    enabled: isAuthenticated,
   });
 
   // Load specific template
@@ -130,7 +144,7 @@ const DeployUsingTemplate: React.FC = () => {
       }
       return response.json();
     },
-    enabled: !!deploymentId,
+    enabled: !!deploymentId && isAuthenticated,
     refetchInterval: 2000, // Poll every 2 seconds
   });
 
@@ -143,6 +157,15 @@ const DeployUsingTemplate: React.FC = () => {
   }, [deploymentLogs]);
 
   const handleLoadTemplate = () => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to load templates",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!selectedFt) {
       toast({
         title: "Error",
@@ -155,6 +178,15 @@ const DeployUsingTemplate: React.FC = () => {
   };
 
   const handleDeploy = () => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to deploy templates",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!loadedTemplate) {
       toast({
         title: "Error",
@@ -165,6 +197,14 @@ const DeployUsingTemplate: React.FC = () => {
     }
     deployMutation.mutate(loadedTemplate);
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-[#EEEEEE] text-lg">Please log in to access template deployment</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -212,6 +252,9 @@ const DeployUsingTemplate: React.FC = () => {
                     )}
                     {loadedTemplate.metadata.targetUser && (
                       <div>Target User: {loadedTemplate.metadata.targetUser}</div>
+                    )}
+                    {user && (
+                      <div>User: {user.username} ({user.role})</div>
                     )}
                   </div>
                 </div>

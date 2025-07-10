@@ -48,7 +48,7 @@ def get_user_group_for_target(target_user):
     elif target_user in ['infadm', 'abpwrk1', 'admin']:
         return 'aimsys'
     else:
-        return target_user  # fallback to same as user
+        return target_user
 
 def execute_ansible_file_deployment(step, deployment_id, ft_number, current_user):
     """Execute file deployment using Ansible with validation and backup"""
@@ -445,6 +445,133 @@ def execute_ansible_service_restart(step, deployment_id, current_user):
         log_message(deployment_id, f"ERROR in Ansible service operation: {str(e)}")
         return False
 
+def execute_ansible_playbook(step, deployment_id, current_user):
+    """Execute an existing Ansible playbook"""
+    deployment = active_deployments.get(deployment_id)
+    if not deployment:
+        return False
+    
+    try:
+        playbook_name = step.get('playbook')
+        
+        log_message(deployment_id, f"Starting Ansible playbook execution: {playbook_name} (initiated by {current_user['username']})")
+        
+        # Load inventory to get playbook details
+        inventory_path = '/app/inventory/inventory.json'
+        with open(inventory_path, 'r') as f:
+            inventory = json.load(f)
+        
+        playbook_details = next(
+            (pb for pb in inventory.get('playbooks', []) 
+             if pb['name'] == playbook_name), None
+        )
+        
+        if not playbook_details:
+            log_message(deployment_id, f"ERROR: Playbook '{playbook_name}' not found")
+            return False
+        
+        playbook_path = playbook_details['path']
+        inventory_file = playbook_details['inventory']
+        extra_vars = playbook_details.get('extra_vars', [])
+        
+        log_message(deployment_id, f"Playbook path: {playbook_path}")
+        log_message(deployment_id, f"Using inventory: {inventory_file}")
+        
+        # Build command
+        cmd = ["ansible-playbook", playbook_path, "-i", inventory_file, "-f", "10"]
+        
+        # Add extra variables
+        for var in extra_vars:
+            cmd.extend(["-e", var])
+        
+        cmd.extend(["-vvv"])  # Verbose output
+        
+        log_message(deployment_id, f"Executing command: {' '.join(cmd)}")
+        
+        # Execute command and capture real-time output
+        return execute_command_with_live_output(cmd, deployment_id, current_user)
+        
+    except Exception as e:
+        log_message(deployment_id, f"ERROR in Ansible playbook execution: {str(e)}")
+        return False
+
+def execute_helm_upgrade(step, deployment_id, current_user):
+    """Execute Helm upgrade"""
+    deployment = active_deployments.get(deployment_id)
+    if not deployment:
+        return False
+    
+    try:
+        pod_name = step.get('pod')
+        
+        log_message(deployment_id, f"Starting Helm upgrade for pod: {pod_name} (initiated by {current_user['username']})")
+        
+        # Load inventory to get helm upgrade details
+        inventory_path = '/app/inventory/inventory.json'
+        with open(inventory_path, 'r') as f:
+            inventory = json.load(f)
+        
+        helm_details = next(
+            (helm for helm in inventory.get('helm_upgrades', []) 
+             if helm['pod'] == pod_name), None
+        )
+        
+        if not helm_details:
+            log_message(deployment_id, f"ERROR: Helm upgrade for pod '{pod_name}' not found")
+            return False
+        
+        command = helm_details['command']
+        log_message(deployment_id, f"Executing Helm command: {command}")
+        
+        # Execute command
+        cmd = ["bash", "-c", command]
+        return execute_command_with_live_output(cmd, deployment_id, current_user)
+        
+    except Exception as e:
+        log_message(deployment_id, f"ERROR in Helm upgrade: {str(e)}")
+        return False
+
+def execute_command_with_live_output(cmd, deployment_id, current_user):
+    """Execute a command and capture live output"""
+    try:
+        # Set up environment
+        env_vars = os.environ.copy()
+        
+        # Use Popen for real-time output
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env_vars,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        # Read output in real-time
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                # Clean up the output and log it
+                clean_output = output.strip()
+                if clean_output:  # Only log non-empty lines
+                    log_message(deployment_id, clean_output)
+        
+        rc = process.poll()
+        
+        if rc == 0:
+            log_message(deployment_id, f"SUCCESS: Command executed successfully (initiated by {current_user['username']})")
+            return True
+        else:
+            log_message(deployment_id, f"ERROR: Command failed with return code: {rc} (initiated by {current_user['username']})")
+            return False
+            
+    except Exception as e:
+        log_message(deployment_id, f"ERROR executing command: {str(e)}")
+        return False
+
 def execute_ansible_playbook_file(playbook_file, inventory_file, deployment_id, current_user):
     """Execute an Ansible playbook file and capture detailed output"""
     try:
@@ -531,8 +658,6 @@ def execute_deployment_step(step, deployment_id, ft_number, current_user):
     except Exception as e:
         log_message(deployment_id, f"ERROR in step {step.get('order')}: {str(e)}")
         return False
-
-# ... keep existing code (execute_ansible_playbook, execute_helm_upgrade functions) the same ...
 
 def run_template_deployment(deployment_id, template, ft_number):
     """Run the template deployment in a separate thread"""
@@ -695,5 +820,3 @@ def get_deployment_logs(deployment_id):
     except Exception as e:
         current_app.logger.error(f"Error getting deployment logs: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
-# ... keep existing code (API routes for playbooks, helm-upgrades, db-inventory) the same ...
