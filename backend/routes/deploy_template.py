@@ -139,14 +139,11 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
             log_message(deployment_id, f"Systemd operation timed out after {timeout} seconds")
             return False
             
-        else:
-            log_message(deployment_id, f"Unknown step type: {step_type}")
-            return False
+        # else:
+        #     log_message(deployment_id, f"Unknown step type: {step_type}")
+        #     return False
             
-    except Exception as e:
-        log_message(deployment_id, f"Error executing step: {str(e)}")
-        current_app.logger.error(f"Error in execute_template_step: {str(e)}")
-        return False
+    
             
         # elif step_type == 'service_restart':
         #     # Convert template step to systemd operation format
@@ -224,8 +221,13 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
             log_message(deployment_id, f"ERROR: Unknown step type: {step_type}")
             return False
             
+    # except Exception as e:
+    #     log_message(deployment_id, f"ERROR in step {step.get('order')}: {str(e)}")
+    #     return False
+
     except Exception as e:
-        log_message(deployment_id, f"ERROR in step {step.get('order')}: {str(e)}")
+        log_message(deployment_id, f"Error executing step: {str(e)}")
+        current_app.logger.error(f"Error in execute_template_step: {str(e)}")
         return False
 
 def run_template_deployment(deployment_id, template, ft_number):
@@ -388,7 +390,7 @@ def deploy_template():
         current_app.logger.error(f"Error starting template deployment: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-        
+
 @deploy_template_bp.route('/api/deploy/template/<deployment_id>/logs', methods=['GET'])
 def get_deployment_logs(deployment_id):
     """Get logs for a template deployment using main app's system"""
