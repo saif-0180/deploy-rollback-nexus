@@ -31,7 +31,7 @@ def log_message(deployment_id, message):
 
 def execute_template_step(step, deployment_id, ft_number, current_user):
     """Execute a template step using the main app's deployment system"""
-    from app import deployments, execute_file_deployment, execute_sql_deployment, execute_systemd_operation, execute_shell_command
+    from app import deployments, run_file_deployment, run_sql_deployment, run_systemd_deployment, run_shell_deployment
     
     deployment = deployments.get(deployment_id)
     if not deployment:
@@ -59,7 +59,7 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
                         'targetUser': target_user,
                         'vms': [vm]
                     }
-                    success = execute_file_deployment(deployment_id, deployment_data, current_user)
+                    success = run_file_deployment(deployment_id, deployment_data, current_user)
                     if not success:
                         return False
             return True
@@ -80,7 +80,7 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
                     'dbUser': db_user,
                     'dbPassword': db_password_encoded
                 }
-                success = execute_sql_deployment(deployment_id, deployment_data, current_user)
+                success = run_sql_deployment(deployment_id, deployment_data, current_user)
                 if not success:
                     return False
             return True
@@ -96,7 +96,7 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
                 'operation': operation,
                 'vms': target_vms
             }
-            return execute_systemd_operation(deployment_id, deployment_data, current_user)
+            return run_systemd_deployment(deployment_id, deployment_data, current_user)
             
         elif step_type == 'ansible_playbook':
             # Execute Ansible playbook using shell command
@@ -130,7 +130,7 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
                 'command': cmd,
                 'vms': ['localhost']  # Ansible runs from control node
             }
-            return execute_shell_command(deployment_id, deployment_data, current_user)
+            return run_shell_deployment(deployment_id, deployment_data, current_user)
             
         elif step_type == 'helm_upgrade':
             # Execute Helm upgrade using shell command
@@ -155,7 +155,7 @@ def execute_template_step(step, deployment_id, ft_number, current_user):
                 'command': command,
                 'vms': ['localhost']  # Helm runs from control node
             }
-            return execute_shell_command(deployment_id, deployment_data, current_user)
+            return run_shell_deployment(deployment_id, deployment_data, current_user)
             
         else:
             log_message(deployment_id, f"ERROR: Unknown step type: {step_type}")
