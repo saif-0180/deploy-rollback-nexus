@@ -203,7 +203,7 @@ def save_template():
             return jsonify({'error': 'Missing ft_number or template'}), 400
         
         # Create deployment templates directory if it doesn't exist
-        templates_dir = '/apps/deployment_templates'
+        templates_dir = '/app/deployment_templates'
         os.makedirs(templates_dir, exist_ok=True)
         
         # Save template to file with FT number in filename
@@ -221,7 +221,7 @@ def list_templates():
     """List all available templates from deployment templates directory"""
     try:
         templates = []
-        templates_dir = '/apps/deployment_templates'
+        templates_dir = '/app/deployment_templates'
         
         if os.path.exists(templates_dir):
             for file in os.listdir(templates_dir):
@@ -238,7 +238,7 @@ def list_templates():
 def get_template(ft_number):
     """Get a specific template from deployment templates directory"""
     try:
-        template_file = os.path.join('/apps/deployment_templates', f'{ft_number}_template.json')
+        template_file = os.path.join('/app/deployment_templates', f'{ft_number}_template.json')
         
         if not os.path.exists(template_file):
             return jsonify({'error': 'Template not found'}), 404
