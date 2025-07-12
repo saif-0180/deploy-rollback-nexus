@@ -56,7 +56,7 @@ interface TemplateInfo {
 }
 
 const DeployUsingTemplate: React.FC = () => {
-  // const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [loadedTemplate, setLoadedTemplate] = useState<DeploymentTemplate | null>(null);
   const [deploymentId, setDeploymentId] = useState<string | null>(null);
@@ -264,9 +264,9 @@ const getStepTypeLabel = (type: string) => {
   }
 };
 
-// if (!isAuthenticated) {
-//   console.warn("🔒 User not authenticated, skipping content render.");
-// }
+if (!isAuthenticated) {
+  console.warn("🔒 User not authenticated, skipping content render.");
+}
 
 
   // // Check authentication
@@ -444,13 +444,13 @@ const getStepTypeLabel = (type: string) => {
   //   }
   // };
 
-  // if (!isAuthenticated) {
-  //   return (
-  //     <div className="flex items-center justify-center h-64">
-  //       <p className="text-[#EEEEEE] text-lg">Please log in to access template deployment</p>
-  //     </div>
-  //   );
-  // }
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-[#EEEEEE] text-lg">Please log in to access template deployment</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
