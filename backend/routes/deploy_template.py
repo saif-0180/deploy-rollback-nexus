@@ -426,34 +426,34 @@ def execute_helm_upgrade(deployment_id, step, inventory, db_inventory):
 
 # New APIs for template generator and Oneclick deploy using template
 
+# 
+
+
 @deploy_template_bp.route('/api/deploy/template', methods=['POST'])
 def deploy_template_route():
-
-    from app import deployments, save_deployment_history
-    """Deploy a template with multiple steps"""
-    # Get current authenticated user
-    # current_user = get_current_user()
-    # if not current_user:
-    #     return jsonify({"error": "Authentication required"}), 401
-
-    data = request.json
-    template_name = data.get('template')
-
-    if not template_name:
-        return jsonify({"error": "Template name is required"}), 400
-
-    deployment_id = result["deploymentId"]
-    threading.Thread(target=deploy_template, args=(template_name, current_user)).start()
-    return jsonify(result), 200
-
-
-    # logger.info(f"Template deployment request received from {current_user['username']}: {template_name}")
+    from app import deployments, save_deployment_history  # Ensure these are valid imports
 
     try:
+        data = request.get_json()
+        logger.debug(f"Received JSON payload: {data}")
+
+        template_name = data.get('template')
+        if not template_name:
+            logger.warning("Missing 'template' key in request")
+            return jsonify({"error": "Template name is required"}), 400
+
+        # You can replace this with real user logic if available
+        current_user = {"username": "mockuser", "role": "admin"}
+        logger.info(f"Initiating deployment for template: {template_name} by user: {current_user['username']}")
+
+        # Call the deployment function
         result, status_code = deploy_template(template_name, current_user)
+        logger.info(f"Deployment started: {result.get('deploymentId')} (Status code: {status_code})")
+
         return jsonify(result), status_code
+
     except Exception as e:
-        logger.error(f"Template deployment error: {str(e)}")
+        logger.exception("Error occurred while handling template deployment")
         return jsonify({"error": str(e)}), 500
 
 @deploy_template_bp.route('/api/templates', methods=['GET'])

@@ -9,7 +9,7 @@ import logging
 
 # Get logger
 logger = logging.getLogger('fix_deployment_orchestrator')
-
+logging.basicConfig(level=logging.DEBUG)
 db_routes = Blueprint('db_routes', __name__)
 
 # Deploy directory for logs
