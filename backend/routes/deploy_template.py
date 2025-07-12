@@ -236,15 +236,104 @@ def execute_sql_deployment(deployment_id, step, inventory, db_inventory):
         log_message(deployment_id, f"ERROR: {error_msg}")
         raise
 
+# def execute_service_restart(deployment_id, step, inventory, db_inventory):
+#     """Execute service restart step"""
+#     try:
+#         log_message(deployment_id, f"Starting service operation step {step['order']}: {step['description']}")
+        
+#         service = step['service']
+#         operation = step['operation']
+#         target_vms = step['targetVMs']
+        
+#         # Resolve target VMs
+#         resolved_vms = []
+#         for vm in target_vms:
+#             vm_info = get_inventory_value(vm, inventory, db_inventory)
+#             if vm_info:
+#                 resolved_vms.append(vm_info)
+#             else:
+#                 resolved_vms.append(vm)
+        
+#         log_message(deployment_id, f"Performing '{operation}' operation on service '{service}' for {len(resolved_vms)} VMs")
+        
+#         # Generate ansible playbook for service operation
+#         playbook_file = f"/tmp/service_{deployment_id}_{step['order']}.yml"
+        
+#         with open(playbook_file, 'w') as f:
+#             f.write(f"""---
+# - name: Service {operation} for {service} (Step {step['order']})
+#   hosts: deployment_targets
+#   gather_facts: false
+#   become: true
+#   tasks:
+#     - name: Test connection
+#       ansible.builtin.ping:
+      
+#     - name: {operation.title()} {service}
+#       ansible.builtin.systemd:
+#         name: {service}
+#         state: {"started" if operation == "start" else "stopped" if operation == "stop" else "restarted" if operation == "restart" else ""}
+#         enabled: {"yes" if operation == "enable" else "no" if operation == "disable" else ""}
+#       register: service_result
+#       when: "'{operation}' in ['start', 'stop', 'restart', 'enable', 'disable']"
+      
+#     - name: Get service status
+#       ansible.builtin.systemd:
+#         name: {service}
+#       register: service_status
+#       when: "'{operation}' == 'status'"
+      
+#     - name: Log service status
+#       ansible.builtin.debug:
+#         msg: "Service {service} status: {{{{ service_status.status.ActiveState if service_status is defined else 'N/A' }}}}"
+#       when: "'{operation}' == 'status'"
+      
+#     - name: Log operation result
+#       ansible.builtin.debug:
+#         msg: "Service {service} {operation} completed successfully"
+#       when: "'{operation}' != 'status' and service_result.changed"
+# """)
+        
+#         # Create inventory file
+#         inventory_file = f"/tmp/inventory_{deployment_id}_{step['order']}"
+#         with open(inventory_file, 'w') as f:
+#             f.write("[deployment_targets]\n")
+#             for vm_name in resolved_vms:
+#                 if isinstance(vm_name, dict) and 'ip' in vm_name:
+#                     f.write(f"{vm_name['name']} ansible_host={vm_name['ip']} ansible_user=infadm ansible_ssh_private_key_file=/home/users/infadm/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'\n")
+#                 else:
+#                     vm_info = next((v for v in inventory.get("vms", []) if v["name"] == vm_name), None)
+#                     if vm_info:
+#                         f.write(f"{vm_name} ansible_host={vm_info['ip']} ansible_user=infadm ansible_ssh_private_key_file=/home/users/infadm/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'\n")
+        
+#         # Execute ansible playbook
+#         cmd = ["ansible-playbook", "-i", inventory_file, playbook_file]
+#         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        
+#         if result.returncode == 0:
+#             log_message(deployment_id, f"Service {operation} on {service} completed successfully")
+#         else:
+#             error_msg = f"Service operation failed: {result.stderr}"
+#             log_message(deployment_id, f"ERROR: {error_msg}")
+#             raise Exception(error_msg)
+        
+#         log_message(deployment_id, f"Service operation step {step['order']} completed successfully")
+        
+#     except Exception as e:
+#         error_msg = f"Service operation step {step['order']} failed: {str(e)}"
+#         log_message(deployment_id, f"ERROR: {error_msg}")
+#         raise
+
 def execute_service_restart(deployment_id, step, inventory, db_inventory):
-    """Execute service restart step"""
+    """Execute service operation step using systemctl shell commands"""
+    from app import log_message, deployments, save_deployment_history
     try:
         log_message(deployment_id, f"Starting service operation step {step['order']}: {step['description']}")
-        
+
         service = step['service']
         operation = step['operation']
         target_vms = step['targetVMs']
-        
+
         # Resolve target VMs
         resolved_vms = []
         for vm in target_vms:
@@ -253,48 +342,37 @@ def execute_service_restart(deployment_id, step, inventory, db_inventory):
                 resolved_vms.append(vm_info)
             else:
                 resolved_vms.append(vm)
-        
+
         log_message(deployment_id, f"Performing '{operation}' operation on service '{service}' for {len(resolved_vms)} VMs")
-        
-        # Generate ansible playbook for service operation
+
+        # Generate the Ansible playbook using raw shell commands
         playbook_file = f"/tmp/service_{deployment_id}_{step['order']}.yml"
-        
         with open(playbook_file, 'w') as f:
             f.write(f"""---
-- name: Service {operation} for {service} (Step {step['order']})
+- name: Run service operation '{operation}' on '{service}' (Step {step['order']})
   hosts: deployment_targets
   gather_facts: false
   become: true
   tasks:
     - name: Test connection
-      ansible.builtin.ping:
-      
-    - name: {operation.title()} {service}
-      ansible.builtin.systemd:
-        name: {service}
-        state: {"started" if operation == "start" else "stopped" if operation == "stop" else "restarted" if operation == "restart" else ""}
-        enabled: {"yes" if operation == "enable" else "no" if operation == "disable" else ""}
-      register: service_result
-      when: "'{operation}' in ['start', 'stop', 'restart', 'enable', 'disable']"
-      
-    - name: Get service status
-      ansible.builtin.systemd:
-        name: {service}
-      register: service_status
-      when: "'{operation}' == 'status'"
-      
-    - name: Log service status
-      ansible.builtin.debug:
-        msg: "Service {service} status: {{{{ service_status.status.ActiveState if service_status is defined else 'N/A' }}}}"
-      when: "'{operation}' == 'status'"
-      
-    - name: Log operation result
-      ansible.builtin.debug:
-        msg: "Service {service} {operation} completed successfully"
-      when: "'{operation}' != 'status' and service_result.changed"
+      ping:
+
+    - name: Run systemctl '{operation}' for {service}
+      shell: |
+        echo "Executing systemctl {operation} {service}"
+        systemctl {operation} {service}
+      register: service_shell_result
+      ignore_errors: true
+
+    - name: Output command result
+      debug:
+        msg: |
+          STDOUT: {{ service_shell_result.stdout }}
+          STDERR: {{ service_shell_result.stderr }}
+          RC: {{ service_shell_result.rc }}
 """)
-        
-        # Create inventory file
+
+        # Create dynamic inventory file
         inventory_file = f"/tmp/inventory_{deployment_id}_{step['order']}"
         with open(inventory_file, 'w') as f:
             f.write("[deployment_targets]\n")
@@ -305,20 +383,21 @@ def execute_service_restart(deployment_id, step, inventory, db_inventory):
                     vm_info = next((v for v in inventory.get("vms", []) if v["name"] == vm_name), None)
                     if vm_info:
                         f.write(f"{vm_name} ansible_host={vm_info['ip']} ansible_user=infadm ansible_ssh_private_key_file=/home/users/infadm/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'\n")
-        
-        # Execute ansible playbook
+
+        # Run the playbook
         cmd = ["ansible-playbook", "-i", inventory_file, playbook_file]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        
+
+        # Process result
         if result.returncode == 0:
-            log_message(deployment_id, f"Service {operation} on {service} completed successfully")
+            log_message(deployment_id, f"✅ Service '{operation}' on '{service}' completed successfully.\n{result.stdout}")
         else:
-            error_msg = f"Service operation failed: {result.stderr}"
-            log_message(deployment_id, f"ERROR: {error_msg}")
+            error_msg = f"❌ Service operation '{operation}' on '{service}' failed:\nSTDERR:\n{result.stderr}"
+            log_message(deployment_id, error_msg)
             raise Exception(error_msg)
-        
+
         log_message(deployment_id, f"Service operation step {step['order']} completed successfully")
-        
+
     except Exception as e:
         error_msg = f"Service operation step {step['order']} failed: {str(e)}"
         log_message(deployment_id, f"ERROR: {error_msg}")
@@ -549,6 +628,7 @@ def can_execute_step(step, completed_steps, dependencies):
 
 def process_template_deployment(deployment_id):
     """Process template deployment with dependency management"""
+     from app import deployments, save_deployment_history
     deployment = deployments[deployment_id]
     
     try:
