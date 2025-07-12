@@ -40,7 +40,7 @@ def execute_file_deployment_fresh(step, deployment_id, ft_number, current_user, 
                     '-i', '/app/inventory/inventory.json',
                     '--user', target_user,
                     '-m', 'shell',
-                    '-a', f'if [ -f {target_path}/{file} ]; then cp {target_path}/{file} {target_path}/{file}.bak.$(date +%Y%m%d_%H%M%S); echo "Backup created"; else echo "No existing file to backup"; fi'
+                    '-a', f'if [ -f {target_path}/{file} ]; then cp {target_path}/{file} {target_path}/{file}.bak.$(date +%Y%m%d_%H%M%S); echo "Backup created for {file}"; else echo "No existing file {file} to backup"; fi'
                 ]
 
                 timestamp = datetime.now().strftime('%H:%M:%S')
@@ -69,11 +69,11 @@ def execute_file_deployment_fresh(step, deployment_id, ft_number, current_user, 
                     '-i', '/app/inventory/inventory.json',
                     '--user', target_user,
                     '-m', 'copy',
-                    '-a', f'src=/app/files/{ft_source}/{file} dest={target_path}/{file} backup=yes'
+                    '-a', f'src=/app/fixfiles/AllFts/{ft_source}/{file} dest={target_path}/{file} backup=yes'
                 ]
 
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                log_entry = f"[{timestamp}] Copying {file} from /app/files/{ft_source}/ to {vm}:{target_path}"
+                log_entry = f"[{timestamp}] Copying {file} from /app/fixfiles/AllFts/{ft_source}/ to {vm}:{target_path}"
                 deployment['logs'].append(log_entry)
 
                 try:
@@ -93,7 +93,7 @@ def execute_file_deployment_fresh(step, deployment_id, ft_number, current_user, 
                     if copy_result.returncode != 0:
                         success = False
                         timestamp = datetime.now().strftime('%H:%M:%S')
-                        deployment['logs'].append(f"[{timestamp}] File copy failed for {file} to {vm}")
+                        deployment['logs'].append(f"[{timestamp}] File copy FAILED for {file} to {vm} - Return code: {copy_result.returncode}")
                     else:
                         timestamp = datetime.now().strftime('%H:%M:%S')
                         deployment['logs'].append(f"[{timestamp}] Successfully copied {file} to {vm}:{target_path}")
@@ -101,18 +101,18 @@ def execute_file_deployment_fresh(step, deployment_id, ft_number, current_user, 
                 except subprocess.TimeoutExpired:
                     success = False
                     timestamp = datetime.now().strftime('%H:%M:%S')
-                    deployment['logs'].append(f"[{timestamp}] File copy timeout for {file} to {vm}")
+                    deployment['logs'].append(f"[{timestamp}] File copy TIMEOUT for {file} to {vm}")
                 except Exception as e:
                     success = False
                     timestamp = datetime.now().strftime('%H:%M:%S')
-                    deployment['logs'].append(f"[{timestamp}] File copy exception: {str(e)}")
+                    deployment['logs'].append(f"[{timestamp}] File copy EXCEPTION: {str(e)}")
 
         save_deployment_history()
         return success
 
     except Exception as e:
         timestamp = datetime.now().strftime('%H:%M:%S')
-        deployment['logs'].append(f"[{timestamp}] File deployment exception: {str(e)}")
+        deployment['logs'].append(f"[{timestamp}] File deployment EXCEPTION: {str(e)}")
         save_deployment_history()
         return False
 
@@ -147,7 +147,7 @@ def execute_sql_deployment_fresh(step, deployment_id, ft_number, current_user, d
                 '-i', '/app/inventory/inventory.json',
                 '--user', 'infadm',
                 '-m', 'shell',
-                '-a', f'PGPASSWORD="{db_password}" psql -h localhost -U {db_user} -d {db_connection} -f /app/files/{ft_source}/{sql_file}'
+                '-a', f'cd /app/fixfiles/AllFts/{ft_source} && PGPASSWORD="{db_password}" psql -h localhost -U {db_user} -d {db_connection} -f {sql_file}'
             ]
 
             try:
@@ -167,7 +167,7 @@ def execute_sql_deployment_fresh(step, deployment_id, ft_number, current_user, d
                 if sql_result.returncode != 0:
                     success = False
                     timestamp = datetime.now().strftime('%H:%M:%S')
-                    deployment['logs'].append(f"[{timestamp}] SQL execution failed for {sql_file}")
+                    deployment['logs'].append(f"[{timestamp}] SQL execution FAILED for {sql_file} - Return code: {sql_result.returncode}")
                 else:
                     timestamp = datetime.now().strftime('%H:%M:%S')
                     deployment['logs'].append(f"[{timestamp}] Successfully executed SQL file {sql_file}")
@@ -175,18 +175,18 @@ def execute_sql_deployment_fresh(step, deployment_id, ft_number, current_user, d
             except subprocess.TimeoutExpired:
                 success = False
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                deployment['logs'].append(f"[{timestamp}] SQL execution timeout for {sql_file}")
+                deployment['logs'].append(f"[{timestamp}] SQL execution TIMEOUT for {sql_file}")
             except Exception as e:
                 success = False
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                deployment['logs'].append(f"[{timestamp}] SQL execution exception: {str(e)}")
+                deployment['logs'].append(f"[{timestamp}] SQL execution EXCEPTION: {str(e)}")
 
         save_deployment_history()
         return success
 
     except Exception as e:
         timestamp = datetime.now().strftime('%H:%M:%S')
-        deployment['logs'].append(f"[{timestamp}] SQL deployment exception: {str(e)}")
+        deployment['logs'].append(f"[{timestamp}] SQL deployment EXCEPTION: {str(e)}")
         save_deployment_history()
         return False
 
@@ -208,15 +208,6 @@ def execute_service_restart_fresh(step, deployment_id, ft_number, current_user, 
             deployment['logs'].append(log_entry)
             current_app.logger.info(f"[{deployment_id}] {log_entry}")
 
-            systemd_cmd = [
-                'ansible', vm,
-                '-i', '/app/inventory/inventory.json',
-                '--user', 'infadm',
-                '--become',
-                '-m', 'systemd',
-                '-a', f'name={service} state={"started" if operation == "start" else "stopped" if operation == "stop" else "restarted" if operation == "restart" else operation}'
-            ]
-
             if operation == 'status':
                 systemd_cmd = [
                     'ansible', vm,
@@ -225,6 +216,15 @@ def execute_service_restart_fresh(step, deployment_id, ft_number, current_user, 
                     '--become',
                     '-m', 'shell',
                     '-a', f'systemctl status {service}'
+                ]
+            else:
+                systemd_cmd = [
+                    'ansible', vm,
+                    '-i', '/app/inventory/inventory.json',
+                    '--user', 'infadm',
+                    '--become',
+                    '-m', 'systemd',
+                    '-a', f'name={service} state={"started" if operation == "start" else "stopped" if operation == "stop" else "restarted"}'
                 ]
 
             try:
@@ -244,7 +244,7 @@ def execute_service_restart_fresh(step, deployment_id, ft_number, current_user, 
                 if systemd_result.returncode != 0 and operation != 'status':
                     success = False
                     timestamp = datetime.now().strftime('%H:%M:%S')
-                    deployment['logs'].append(f"[{timestamp}] Systemd operation failed: {operation} {service} on {vm}")
+                    deployment['logs'].append(f"[{timestamp}] Systemd operation FAILED: {operation} {service} on {vm} - Return code: {systemd_result.returncode}")
                 else:
                     timestamp = datetime.now().strftime('%H:%M:%S')
                     deployment['logs'].append(f"[{timestamp}] Successfully executed {operation} on {service} at {vm}")
@@ -252,18 +252,18 @@ def execute_service_restart_fresh(step, deployment_id, ft_number, current_user, 
             except subprocess.TimeoutExpired:
                 success = False
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                deployment['logs'].append(f"[{timestamp}] Systemd operation timeout: {operation} {service} on {vm}")
+                deployment['logs'].append(f"[{timestamp}] Systemd operation TIMEOUT: {operation} {service} on {vm}")
             except Exception as e:
                 success = False
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                deployment['logs'].append(f"[{timestamp}] Systemd operation exception: {str(e)}")
+                deployment['logs'].append(f"[{timestamp}] Systemd operation EXCEPTION: {str(e)}")
 
         save_deployment_history()
         return success
 
     except Exception as e:
         timestamp = datetime.now().strftime('%H:%M:%S')
-        deployment['logs'].append(f"[{timestamp}] Service restart exception: {str(e)}")
+        deployment['logs'].append(f"[{timestamp}] Service restart EXCEPTION: {str(e)}")
         save_deployment_history()
         return False
 
@@ -276,9 +276,20 @@ def execute_ansible_playbook_fresh(step, deployment_id, ft_number, current_user,
     try:
         playbook_name = step.get('playbook', '')
         
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        log_entry = f"[{timestamp}] Loading inventory to find playbook: {playbook_name}"
+        deployment['logs'].append(log_entry)
+        
         # Load inventory to get playbook details
-        with open('/app/inventory/inventory.json', 'r') as f:
-            inventory = json.load(f)
+        try:
+            with open('/app/inventory/inventory.json', 'r') as f:
+                inventory = json.load(f)
+        except Exception as e:
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            log_entry = f"[{timestamp}] ERROR loading inventory: {str(e)}"
+            deployment['logs'].append(log_entry)
+            save_deployment_history()
+            return False
         
         playbook_info = None
         for pb in inventory.get('playbooks', []):
@@ -288,13 +299,13 @@ def execute_ansible_playbook_fresh(step, deployment_id, ft_number, current_user,
         
         if not playbook_info:
             timestamp = datetime.now().strftime('%H:%M:%S')
-            log_entry = f"[{timestamp}] Playbook {playbook_name} not found in inventory"
+            log_entry = f"[{timestamp}] Playbook {playbook_name} NOT FOUND in inventory"
             deployment['logs'].append(log_entry)
             save_deployment_history()
             return False
 
         timestamp = datetime.now().strftime('%H:%M:%S')
-        log_entry = f"[{timestamp}] Starting Ansible playbook: {playbook_name} on batch1 with infadm user"
+        log_entry = f"[{timestamp}] Found playbook {playbook_name}, executing on batch1 with infadm user"
         deployment['logs'].append(log_entry)
         current_app.logger.info(f"[{deployment_id}] {log_entry}")
 
@@ -316,6 +327,10 @@ def execute_ansible_playbook_fresh(step, deployment_id, ft_number, current_user,
         if playbook_info.get('vault_password_file'):
             cmd.extend(['--vault-password-file', playbook_info['vault_password_file']])
 
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        log_entry = f"[{timestamp}] Executing command: {' '.join(cmd)}"
+        deployment['logs'].append(log_entry)
+
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
             
@@ -333,23 +348,23 @@ def execute_ansible_playbook_fresh(step, deployment_id, ft_number, current_user,
             success = result.returncode == 0
             if success:
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                deployment['logs'].append(f"[{timestamp}] Ansible playbook {playbook_name} completed successfully")
+                deployment['logs'].append(f"[{timestamp}] Ansible playbook {playbook_name} completed SUCCESSFULLY")
             else:
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                deployment['logs'].append(f"[{timestamp}] Ansible playbook {playbook_name} failed")
+                deployment['logs'].append(f"[{timestamp}] Ansible playbook {playbook_name} FAILED - Return code: {result.returncode}")
 
             save_deployment_history()
             return success
 
         except subprocess.TimeoutExpired:
             timestamp = datetime.now().strftime('%H:%M:%S')
-            deployment['logs'].append(f"[{timestamp}] Ansible playbook timeout: {playbook_name}")
+            deployment['logs'].append(f"[{timestamp}] Ansible playbook TIMEOUT: {playbook_name}")
             save_deployment_history()
             return False
 
     except Exception as e:
         timestamp = datetime.now().strftime('%H:%M:%S')
-        deployment['logs'].append(f"[{timestamp}] Ansible playbook exception: {str(e)}")
+        deployment['logs'].append(f"[{timestamp}] Ansible playbook EXCEPTION: {str(e)}")
         save_deployment_history()
         return False
 
@@ -362,9 +377,20 @@ def execute_helm_upgrade_fresh(step, deployment_id, ft_number, current_user, dep
     try:
         helm_deployment_type = step.get('helmDeploymentType', '')
         
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        log_entry = f"[{timestamp}] Loading inventory to find helm upgrade: {helm_deployment_type}"
+        deployment['logs'].append(log_entry)
+        
         # Load inventory to get helm command
-        with open('/app/inventory/inventory.json', 'r') as f:
-            inventory = json.load(f)
+        try:
+            with open('/app/inventory/inventory.json', 'r') as f:
+                inventory = json.load(f)
+        except Exception as e:
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            log_entry = f"[{timestamp}] ERROR loading inventory: {str(e)}"
+            deployment['logs'].append(log_entry)
+            save_deployment_history()
+            return False
         
         helm_command = None
         for upgrade in inventory.get('helm_upgrades', []):
@@ -374,13 +400,13 @@ def execute_helm_upgrade_fresh(step, deployment_id, ft_number, current_user, dep
         
         if not helm_command:
             timestamp = datetime.now().strftime('%H:%M:%S')
-            log_entry = f"[{timestamp}] Helm deployment type {helm_deployment_type} not found in inventory"
+            log_entry = f"[{timestamp}] Helm deployment type {helm_deployment_type} NOT FOUND in inventory"
             deployment['logs'].append(log_entry)
             save_deployment_history()
             return False
 
         timestamp = datetime.now().strftime('%H:%M:%S')
-        log_entry = f"[{timestamp}] Starting Helm upgrade: {helm_command} on batch1 with admin user"
+        log_entry = f"[{timestamp}] Found helm command: {helm_command}, executing on batch1 with admin user"
         deployment['logs'].append(log_entry)
         current_app.logger.info(f"[{deployment_id}] {log_entry}")
 
@@ -409,23 +435,23 @@ def execute_helm_upgrade_fresh(step, deployment_id, ft_number, current_user, dep
             success = result.returncode == 0
             if success:
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                deployment['logs'].append(f"[{timestamp}] Helm upgrade {helm_deployment_type} completed successfully")
+                deployment['logs'].append(f"[{timestamp}] Helm upgrade {helm_deployment_type} completed SUCCESSFULLY")
             else:
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                deployment['logs'].append(f"[{timestamp}] Helm upgrade {helm_deployment_type} failed")
+                deployment['logs'].append(f"[{timestamp}] Helm upgrade {helm_deployment_type} FAILED - Return code: {result.returncode}")
 
             save_deployment_history()
             return success
 
         except subprocess.TimeoutExpired:
             timestamp = datetime.now().strftime('%H:%M:%S')
-            deployment['logs'].append(f"[{timestamp}] Helm upgrade timeout: {helm_deployment_type}")
+            deployment['logs'].append(f"[{timestamp}] Helm upgrade TIMEOUT: {helm_deployment_type}")
             save_deployment_history()
             return False
 
     except Exception as e:
         timestamp = datetime.now().strftime('%H:%M:%S')
-        deployment['logs'].append(f"[{timestamp}] Helm upgrade exception: {str(e)}")
+        deployment['logs'].append(f"[{timestamp}] Helm upgrade EXCEPTION: {str(e)}")
         save_deployment_history()
         return False
 
@@ -438,7 +464,7 @@ def execute_template_step(step, deployment_id, ft_number, current_user, deployme
     try:
         step_type = step.get('type')
         timestamp = datetime.now().strftime('%H:%M:%S')
-        log_entry = f"[{timestamp}] Executing step {step.get('order')}: {step.get('description')}"
+        log_entry = f"[{timestamp}] === EXECUTING STEP {step.get('order')}: {step.get('description')} ==="
         deployment['logs'].append(log_entry)
         current_app.logger.info(f"[{deployment_id}] {log_entry}")
         save_deployment_history()
@@ -455,14 +481,14 @@ def execute_template_step(step, deployment_id, ft_number, current_user, deployme
             return execute_helm_upgrade_fresh(step, deployment_id, ft_number, current_user, deployments, save_deployment_history)
         else:
             timestamp = datetime.now().strftime('%H:%M:%S')
-            log_entry = f"[{timestamp}] Unsupported step type: {step_type}"
+            log_entry = f"[{timestamp}] ERROR: Unsupported step type: {step_type}"
             deployment['logs'].append(log_entry)
             save_deployment_history()
             return False
 
     except Exception as e:
         timestamp = datetime.now().strftime('%H:%M:%S')
-        log_entry = f"[{timestamp}] Exception in step {step.get('order')}: {str(e)}"
+        log_entry = f"[{timestamp}] CRITICAL EXCEPTION in step {step.get('order')}: {str(e)}"
         deployment['logs'].append(log_entry)
         current_app.logger.exception(str(e))
         save_deployment_history()
@@ -474,6 +500,7 @@ def run_template_deployment(deployment_id, template, ft_number):
     
     deployment = deployments.get(deployment_id)
     if not deployment:
+        current_app.logger.error(f"Deployment {deployment_id} not found in deployments dictionary")
         return
 
     try:
@@ -481,46 +508,57 @@ def run_template_deployment(deployment_id, template, ft_number):
         current_user = deployment.get('logged_in_user_info', {'username': 'unknown'})
 
         timestamp = datetime.now().strftime('%H:%M:%S')
-        log_entry = f"[{timestamp}] Starting template deployment for {ft_number}"
+        log_entry = f"[{timestamp}] ======= STARTING TEMPLATE DEPLOYMENT FOR {ft_number} ======="
         deployment['logs'].append(log_entry)
+        current_app.logger.info(f"[{deployment_id}] {log_entry}")
 
         steps = template.get('steps', [])
         total_steps = len(steps)
         timestamp = datetime.now().strftime('%H:%M:%S')
         log_entry = f"[{timestamp}] Total steps to execute: {total_steps}"
         deployment['logs'].append(log_entry)
+        
+        # Log the template structure for debugging
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        log_entry = f"[{timestamp}] Template metadata: {template.get('metadata', {})}"
+        deployment['logs'].append(log_entry)
+        
         save_deployment_history()
 
         # Execute steps in order
         for step in sorted(steps, key=lambda x: x.get('order', 0)):
             if deployment['status'] != 'running':
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                log_entry = f"[{timestamp}] Deployment status changed to {deployment['status']}, stopping execution"
+                deployment['logs'].append(log_entry)
                 break
 
             success = execute_template_step(step, deployment_id, ft_number, current_user, deployments, save_deployment_history)
             if not success:
                 deployment['status'] = 'failed'
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                log_entry = f"[{timestamp}] Template deployment failed at step {step.get('order')}: {step.get('description')}"
+                log_entry = f"[{timestamp}] ======= TEMPLATE DEPLOYMENT FAILED AT STEP {step.get('order')}: {step.get('description')} ======="
                 deployment['logs'].append(log_entry)
                 save_deployment_history()
                 return
 
             timestamp = datetime.now().strftime('%H:%M:%S')
-            log_entry = f"[{timestamp}] Step {step.get('order')} completed successfully: {step.get('description')}"
+            log_entry = f"[{timestamp}] === STEP {step.get('order')} COMPLETED SUCCESSFULLY: {step.get('description')} ==="
             deployment['logs'].append(log_entry)
             save_deployment_history()
 
         deployment['status'] = 'success'
         timestamp = datetime.now().strftime('%H:%M:%S')
-        log_entry = f"[{timestamp}] Template deployment completed successfully"
+        log_entry = f"[{timestamp}] ======= TEMPLATE DEPLOYMENT COMPLETED SUCCESSFULLY ======="
         deployment['logs'].append(log_entry)
         save_deployment_history()
 
     except Exception as e:
         deployment['status'] = 'failed'
         timestamp = datetime.now().strftime('%H:%M:%S')
-        log_entry = f"[{timestamp}] ERROR: {str(e)}"
+        log_entry = f"[{timestamp}] ======= CRITICAL ERROR IN TEMPLATE DEPLOYMENT: {str(e)} ======="
         deployment['logs'].append(log_entry)
+        current_app.logger.exception(f"Template deployment error: {str(e)}")
         save_deployment_history()
 
 @deploy_template_bp.route('/api/deploy/template', methods=['POST'])
@@ -539,6 +577,10 @@ def deploy_template():
 
         if not ft_number or not template:
             return jsonify({'error': 'Missing ft_number or template'}), 400
+
+        # Log the incoming request for debugging
+        current_app.logger.info(f"Template deployment request received - FT: {ft_number}, User: {current_user['username']}")
+        current_app.logger.info(f"Template content: {json.dumps(template, indent=2)}")
 
         deployment_id = str(uuid.uuid4())
         current_timestamp = time.time()
@@ -561,6 +603,7 @@ def deploy_template():
 
         save_deployment_history()
         current_app.logger.info(f"Template deployment initiated by {current_user['username']} with ID: {deployment_id}")
+        current_app.logger.info(f"Deployment added to deployments dictionary. Current deployments count: {len(deployments)}")
 
         # Start deployment in background thread
         deployment_thread = threading.Thread(
@@ -589,6 +632,7 @@ def get_deployment_logs(deployment_id):
     try:
         deployment = deployments.get(deployment_id)
         if not deployment:
+            current_app.logger.warning(f"Deployment {deployment_id} not found. Available deployments: {list(deployments.keys())}")
             return jsonify({'error': 'Deployment not found'}), 404
 
         current_user = deployment.get('logged_in_user_info', {'username': 'unknown'})
