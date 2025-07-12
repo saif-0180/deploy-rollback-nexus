@@ -628,7 +628,7 @@ def can_execute_step(step, completed_steps, dependencies):
 
 def process_template_deployment(deployment_id):
     """Process template deployment with dependency management"""
-     from app import deployments, save_deployment_history
+    from app import deployments, save_deployment_history
     deployment = deployments[deployment_id]
     
     try:
