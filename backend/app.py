@@ -359,9 +359,9 @@ def get_systemd_services():
 def deploy_template_route():
     """Deploy a template with multiple steps"""
     # Get current authenticated user
-    current_user = get_current_user()
-    if not current_user:
-        return jsonify({"error": "Authentication required"}), 401
+    # current_user = get_current_user()
+    # if not current_user:
+    #     return jsonify({"error": "Authentication required"}), 401
 
     data = request.json
     template_name = data.get('template')
