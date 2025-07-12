@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useAuth } from '@/contexts/AuthContext';
+// import { useAuth } from '@/contexts/AuthContext';
 import LogDisplay from './LogDisplay';
 import TemplateFlowchart from './TemplateFlowchart';
 
@@ -56,7 +56,7 @@ interface TemplateInfo {
 }
 
 const DeployUsingTemplate: React.FC = () => {
-  const { user, isAuthenticated } = useAuth();
+  // const { user, isAuthenticated } = useAuth();
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [loadedTemplate, setLoadedTemplate] = useState<DeploymentTemplate | null>(null);
   const [deploymentId, setDeploymentId] = useState<string | null>(null);
@@ -64,188 +64,393 @@ const DeployUsingTemplate: React.FC = () => {
   const [deploymentStatus, setDeploymentStatus] = useState<'idle' | 'loading' | 'running' | 'completed' | 'failed'>('idle');
   const { toast } = useToast();
 
-  // Check authentication
-  useEffect(() => {
-    if (!isAuthenticated) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to access this feature",
-        variant: "destructive",
-      });
-    }
-  }, [isAuthenticated, toast]);
-
   // Fetch available templates
-  const { data: templatesData, isLoading: isLoadingTemplates } = useQuery({
-    queryKey: ['available-templates'],
-    queryFn: async () => {
-      const response = await fetch('/api/templates');
-      if (!response.ok) {
-        throw new Error('Failed to fetch templates');
-      }
-      return response.json();
-    },
-    refetchInterval: 30000, // Refresh every 30 seconds
-    enabled: isAuthenticated,
-  });
-
-  const availableTemplates = templatesData?.templates || [];
-
-  // Load specific template
-  const loadTemplateMutation = useMutation({
-    mutationFn: async (templateName: string) => {
-      const response = await fetch(`/api/template/${templateName}`);
-      if (!response.ok) {
-        throw new Error('Failed to load template');
-      }
-      return response.json();
-    },
-    onSuccess: (template) => {
-      setLoadedTemplate(template);
-      toast({
-        title: "Success",
-        description: `Template ${selectedTemplate} loaded successfully`,
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to load template: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Deploy using template
-  const deployMutation = useMutation({
-    mutationFn: async (templateName: string) => {
-      const response = await fetch('/api/deploy/template', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          template: templateName
-        }),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to start template deployment');
-      }
-      return response.json();
-    },
-    onSuccess: (data) => {
-      setDeploymentId(data.deploymentId);
-      setDeploymentStatus('running');
-      toast({
-        title: "Deployment Started",
-        description: `Template deployment initiated with ID: ${data.deploymentId}`,
-      });
-    },
-    onError: (error) => {
-      setDeploymentStatus('failed');
-      toast({
-        title: "Deployment Failed",
-        description: `Failed to start deployment: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Fetch deployment logs
-  const { data: deploymentLogs } = useQuery({
-    queryKey: ['template-deployment-logs', deploymentId],
-    queryFn: async () => {
-      if (!deploymentId) return { logs: [], status: 'idle' };
-      
-      const response = await fetch(`/api/deploy/status/${deploymentId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch deployment logs');
-      }
-      return response.json();
-    },
-    enabled: !!deploymentId && isAuthenticated,
-    refetchInterval: 2000, // Poll every 2 seconds
-  });
-
-  // Update logs and status from API
-  useEffect(() => {
-    if (deploymentLogs) {
-      setLogs(deploymentLogs.logs || []);
-      setDeploymentStatus(deploymentLogs.status || 'idle');
+const { data: templatesData, isLoading: isLoadingTemplates } = useQuery({
+  queryKey: ['available-templates'],
+  queryFn: async () => {
+    console.log("📡 Fetching available templates...");
+    const response = await fetch('/api/templates');
+    console.log("📡 Status:", response.status);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Error fetching templates:", errorText);
+      throw new Error('Failed to fetch templates');
     }
-  }, [deploymentLogs]);
+    const data = await response.json();
+    console.log("✅ Templates fetched:", data);
+    return data;
+  },
+  refetchInterval: 30000,
+  enabled: isAuthenticated,
+});
 
-  const handleLoadTemplate = () => {
-    if (!isAuthenticated) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to load templates",
-        variant: "destructive",
-      });
-      return;
+const availableTemplates = templatesData?.templates || [];
+
+// Load specific template
+const loadTemplateMutation = useMutation({
+  mutationFn: async (templateName: string) => {
+    console.log("📥 Loading template:", templateName);
+    const response = await fetch(`/api/template/${templateName}`);
+    console.log("📡 Status:", response.status);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Error loading template:", errorText);
+      throw new Error('Failed to load template');
+    }
+    const data = await response.json();
+    console.log("✅ Template loaded:", data);
+    return data;
+  },
+  onSuccess: (template) => {
+    setLoadedTemplate(template);
+    console.log("✅ Loaded template state updated:", template);
+    toast({
+      title: "Success",
+      description: `Template ${selectedTemplate} loaded successfully`,
+    });
+  },
+  onError: (error) => {
+    console.error("❌ Template load failed:", error);
+    toast({
+      title: "Error",
+      description: `Failed to load template: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      variant: "destructive",
+    });
+  },
+});
+
+// Deploy using template
+const deployMutation = useMutation({
+  mutationFn: async (templateName: string) => {
+    const payload = { template: templateName };
+    console.log("🚀 Starting deployment with payload:", payload);
+
+    const response = await fetch('/api/deploy/template', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    console.log("📡 Deploy response status:", response.status);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Deployment failed with server response:", errorText);
+      throw new Error('Failed to start template deployment');
     }
 
-    if (!selectedTemplate) {
-      toast({
-        title: "Error",
-        description: "Please select a template",
-        variant: "destructive",
-      });
-      return;
-    }
-    loadTemplateMutation.mutate(selectedTemplate);
-  };
+    const data = await response.json();
+    console.log("✅ Deployment started:", data);
+    return data;
+  },
+  onSuccess: (data) => {
+    setDeploymentId(data.deploymentId);
+    setDeploymentStatus('running');
+    console.log("✅ Deployment ID:", data.deploymentId);
+    toast({
+      title: "Deployment Started",
+      description: `Template deployment initiated with ID: ${data.deploymentId}`,
+    });
+  },
+  onError: (error) => {
+    console.error("❌ Deployment error:", error);
+    setDeploymentStatus('failed');
+    toast({
+      title: "Deployment Failed",
+      description: `Failed to start deployment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      variant: "destructive",
+    });
+  },
+});
 
-  const handleDeploy = () => {
-    if (!isAuthenticated) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to deploy templates",
-        variant: "destructive",
-      });
-      return;
+// Fetch deployment logs
+const { data: deploymentLogs } = useQuery({
+  queryKey: ['template-deployment-logs', deploymentId],
+  queryFn: async () => {
+    if (!deploymentId) return { logs: [], status: 'idle' };
+    
+    console.log("📖 Fetching deployment logs for ID:", deploymentId);
+    const response = await fetch(`/api/deploy/status/${deploymentId}`);
+    console.log("📡 Logs response status:", response.status);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Error fetching logs:", errorText);
+      throw new Error('Failed to fetch deployment logs');
     }
 
-    if (!selectedTemplate) {
-      toast({
-        title: "Error",
-        description: "Please select a template first",
-        variant: "destructive",
-      });
-      return;
-    }
-    deployMutation.mutate(selectedTemplate);
-  };
+    const data = await response.json();
+    console.log("📋 Deployment logs data:", data);
+    return data;
+  },
+  enabled: !!deploymentId && isAuthenticated,
+  refetchInterval: 2000,
+});
 
-  const getStepTypeIcon = (type: string) => {
-    switch (type) {
-      case 'file_deployment': return '📁';
-      case 'sql_deployment': return '🗄️';
-      case 'service_restart': return '🔄';
-      case 'ansible_playbook': return '🎭';
-      case 'helm_upgrade': return '⚙️';
-      default: return '📋';
-    }
-  };
-
-  const getStepTypeLabel = (type: string) => {
-    switch (type) {
-      case 'file_deployment': return 'File Deployment';
-      case 'sql_deployment': return 'SQL Deployment';
-      case 'service_restart': return 'Service Management';
-      case 'ansible_playbook': return 'Ansible Playbook';
-      case 'helm_upgrade': return 'Helm Upgrade';
-      default: return type;
-    }
-  };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-[#EEEEEE] text-lg">Please log in to access template deployment</p>
-      </div>
-    );
+// Update logs and status from API
+useEffect(() => {
+  if (deploymentLogs) {
+    console.log("📲 Updating UI with logs and status:", deploymentLogs);
+    setLogs(deploymentLogs.logs || []);
+    setDeploymentStatus(deploymentLogs.status || 'idle');
   }
+}, [deploymentLogs]);
+
+const handleLoadTemplate = () => {
+  if (!isAuthenticated) {
+    toast({
+      title: "Authentication Required",
+      description: "Please log in to load templates",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  if (!selectedTemplate) {
+    toast({
+      title: "Error",
+      description: "Please select a template",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  console.log("🧩 Handle load template:", selectedTemplate);
+  loadTemplateMutation.mutate(selectedTemplate);
+};
+
+// const handleDeploy = () => {
+//   if (!isAuthenticated) {
+//     toast({
+//       title: "Authentication Required",
+//       description: "Please log in to deploy templates",
+//       variant: "destructive",
+//     });
+//     return;
+//   }
+
+  if (!selectedTemplate) {
+    toast({
+      title: "Error",
+      description: "Please select a template first",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  console.log("🚦 Handle deploy template:", selectedTemplate);
+  deployMutation.mutate(selectedTemplate);
+};
+
+const getStepTypeIcon = (type: string) => {
+  switch (type) {
+    case 'file_deployment': return '📁';
+    case 'sql_deployment': return '🗄️';
+    case 'service_restart': return '🔄';
+    case 'ansible_playbook': return '🎭';
+    case 'helm_upgrade': return '⚙️';
+    default: return '📋';
+  }
+};
+
+const getStepTypeLabel = (type: string) => {
+  switch (type) {
+    case 'file_deployment': return 'File Deployment';
+    case 'sql_deployment': return 'SQL Deployment';
+    case 'service_restart': return 'Service Management';
+    case 'ansible_playbook': return 'Ansible Playbook';
+    case 'helm_upgrade': return 'Helm Upgrade';
+    default: return type;
+  }
+};
+
+// if (!isAuthenticated) {
+//   console.warn("🔒 User not authenticated, skipping content render.");
+// }
+
+
+  // // Check authentication
+  // useEffect(() => {
+  //   if (!isAuthenticated) {
+  //     toast({
+  //       title: "Authentication Required",
+  //       description: "Please log in to access this feature",
+  //       variant: "destructive",
+  //     });
+  //   }
+  // }, [isAuthenticated, toast]);
+
+  // // Fetch available templates
+  // const { data: templatesData, isLoading: isLoadingTemplates } = useQuery({
+  //   queryKey: ['available-templates'],
+  //   queryFn: async () => {
+  //     const response = await fetch('/api/templates');
+  //     if (!response.ok) {
+  //       throw new Error('Failed to fetch templates');
+  //     }
+  //     return response.json();
+  //   },
+  //   refetchInterval: 30000, // Refresh every 30 seconds
+  //   enabled: isAuthenticated,
+  // });
+
+  // const availableTemplates = templatesData?.templates || [];
+
+  // // Load specific template
+  // const loadTemplateMutation = useMutation({
+  //   mutationFn: async (templateName: string) => {
+  //     const response = await fetch(`/api/template/${templateName}`);
+  //     if (!response.ok) {
+  //       throw new Error('Failed to load template');
+  //     }
+  //     return response.json();
+  //   },
+  //   onSuccess: (template) => {
+  //     setLoadedTemplate(template);
+  //     toast({
+  //       title: "Success",
+  //       description: `Template ${selectedTemplate} loaded successfully`,
+  //     });
+  //   },
+  //   onError: (error) => {
+  //     toast({
+  //       title: "Error",
+  //       description: `Failed to load template: ${error instanceof Error ? error.message : 'Unknown error'}`,
+  //       variant: "destructive",
+  //     });
+  //   },
+  // });
+
+  // // Deploy using template
+  // const deployMutation = useMutation({
+  //   mutationFn: async (templateName: string) => {
+  //     const response = await fetch('/api/deploy/template', {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         template: templateName
+  //       }),
+  //     });
+  //     if (!response.ok) {
+  //       throw new Error('Failed to start template deployment');
+  //     }
+  //     return response.json();
+  //   },
+  //   onSuccess: (data) => {
+  //     setDeploymentId(data.deploymentId);
+  //     setDeploymentStatus('running');
+  //     toast({
+  //       title: "Deployment Started",
+  //       description: `Template deployment initiated with ID: ${data.deploymentId}`,
+  //     });
+  //   },
+  //   onError: (error) => {
+  //     setDeploymentStatus('failed');
+  //     toast({
+  //       title: "Deployment Failed",
+  //       description: `Failed to start deployment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+  //       variant: "destructive",
+  //     });
+  //   },
+  // });
+
+  // // Fetch deployment logs
+  // const { data: deploymentLogs } = useQuery({
+  //   queryKey: ['template-deployment-logs', deploymentId],
+  //   queryFn: async () => {
+  //     if (!deploymentId) return { logs: [], status: 'idle' };
+      
+  //     const response = await fetch(`/api/deploy/status/${deploymentId}`);
+  //     if (!response.ok) {
+  //       throw new Error('Failed to fetch deployment logs');
+  //     }
+  //     return response.json();
+  //   },
+  //   enabled: !!deploymentId && isAuthenticated,
+  //   refetchInterval: 2000, // Poll every 2 seconds
+  // });
+
+  // // Update logs and status from API
+  // useEffect(() => {
+  //   if (deploymentLogs) {
+  //     setLogs(deploymentLogs.logs || []);
+  //     setDeploymentStatus(deploymentLogs.status || 'idle');
+  //   }
+  // }, [deploymentLogs]);
+
+  // const handleLoadTemplate = () => {
+  //   if (!isAuthenticated) {
+  //     toast({
+  //       title: "Authentication Required",
+  //       description: "Please log in to load templates",
+  //       variant: "destructive",
+  //     });
+  //     return;
+  //   }
+
+  //   if (!selectedTemplate) {
+  //     toast({
+  //       title: "Error",
+  //       description: "Please select a template",
+  //       variant: "destructive",
+  //     });
+  //     return;
+  //   }
+  //   loadTemplateMutation.mutate(selectedTemplate);
+  // };
+
+  // const handleDeploy = () => {
+  //   if (!isAuthenticated) {
+  //     toast({
+  //       title: "Authentication Required",
+  //       description: "Please log in to deploy templates",
+  //       variant: "destructive",
+  //     });
+  //     return;
+  //   }
+
+  //   if (!selectedTemplate) {
+  //     toast({
+  //       title: "Error",
+  //       description: "Please select a template first",
+  //       variant: "destructive",
+  //     });
+  //     return;
+  //   }
+  //   deployMutation.mutate(selectedTemplate);
+  // };
+
+  // const getStepTypeIcon = (type: string) => {
+  //   switch (type) {
+  //     case 'file_deployment': return '📁';
+  //     case 'sql_deployment': return '🗄️';
+  //     case 'service_restart': return '🔄';
+  //     case 'ansible_playbook': return '🎭';
+  //     case 'helm_upgrade': return '⚙️';
+  //     default: return '📋';
+  //   }
+  // };
+
+  // const getStepTypeLabel = (type: string) => {
+  //   switch (type) {
+  //     case 'file_deployment': return 'File Deployment';
+  //     case 'sql_deployment': return 'SQL Deployment';
+  //     case 'service_restart': return 'Service Management';
+  //     case 'ansible_playbook': return 'Ansible Playbook';
+  //     case 'helm_upgrade': return 'Helm Upgrade';
+  //     default: return type;
+  //   }
+  // };
+
+  // if (!isAuthenticated) {
+  //   return (
+  //     <div className="flex items-center justify-center h-64">
+  //       <p className="text-[#EEEEEE] text-lg">Please log in to access template deployment</p>
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="space-y-6">
