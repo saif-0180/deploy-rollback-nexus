@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
-// import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import LogDisplay from './LogDisplay';
 import TemplateFlowchart from './TemplateFlowchart';
 
@@ -219,15 +219,15 @@ const handleLoadTemplate = () => {
   loadTemplateMutation.mutate(selectedTemplate);
 };
 
-// const handleDeploy = () => {
-//   if (!isAuthenticated) {
-//     toast({
-//       title: "Authentication Required",
-//       description: "Please log in to deploy templates",
-//       variant: "destructive",
-//     });
-//     return;
-//   }
+const handleDeploy = () => {
+  if (!isAuthenticated) {
+    toast({
+      title: "Authentication Required",
+      description: "Please log in to deploy templates",
+      variant: "destructive",
+    });
+    return;
+  }
 
   if (!selectedTemplate) {
     toast({
