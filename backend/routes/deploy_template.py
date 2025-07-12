@@ -426,7 +426,7 @@ def execute_helm_upgrade(deployment_id, step, inventory, db_inventory):
 
 # New APIs for template generator and Oneclick deploy using template
 
-@deploy_template.route('/api/deploy/template', methods=['POST'])
+@deploy_template_bp.route('/api/deploy/template', methods=['POST'])
 def deploy_template_route():
     """Deploy a template with multiple steps"""
     # Get current authenticated user
@@ -449,7 +449,7 @@ def deploy_template_route():
         logger.error(f"Template deployment error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@deploy_template.route('/api/templates', methods=['GET'])
+@deploy_template_bp.route('/api/templates', methods=['GET'])
 def list_templates():
     """List available deployment templates"""
     # current_user = get_current_user()
@@ -485,7 +485,7 @@ def list_templates():
         logger.error(f"Failed to list templates: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@deploy_template.route('/api/template/<template_name>', methods=['GET'])
+@deploy_template_bp.route('/api/template/<template_name>', methods=['GET'])
 def get_template_details(template_name):
     """Get details of a specific template"""
     # current_user = get_current_user()
