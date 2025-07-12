@@ -11,10 +11,13 @@ import logging
 # Assuming these are imported from your main app
 # from app import deployments, log_message, inventory, save_deployment_history, logger
 
+deploy_template_bp = Blueprint('deploy_template', __name__)
+
+
 TEMPLATE_DIR = "/app/deployment_templates"
 INVENTORY_FILE = "/app/inventory/inventory.json"
 DB_INVENTORY_FILE = "/app/inventory/db_inventory.json"
-FIX_FILES_DIR = "/app/fixes"  # Adjust based on your file structure
+FIX_FILES_DIR = "/app/fixfiles"  # Adjust based on your file structure
 
 def load_template(template_name):
     """Load template from the deployment_templates directory"""
