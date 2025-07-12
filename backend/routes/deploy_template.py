@@ -428,6 +428,8 @@ def execute_helm_upgrade(deployment_id, step, inventory, db_inventory):
 
 @deploy_template_bp.route('/api/deploy/template', methods=['POST'])
 def deploy_template_route():
+
+    from app import deployments, save_deployment_history
     """Deploy a template with multiple steps"""
     # Get current authenticated user
     # current_user = get_current_user()
@@ -440,7 +442,12 @@ def deploy_template_route():
     if not template_name:
         return jsonify({"error": "Template name is required"}), 400
 
-    logger.info(f"Template deployment request received from {current_user['username']}: {template_name}")
+    deployment_id = result["deploymentId"]
+    threading.Thread(target=deploy_template, args=(template_name, current_user)).start()
+    return jsonify(result), 200
+
+
+    # logger.info(f"Template deployment request received from {current_user['username']}: {template_name}")
 
     try:
         result, status_code = deploy_template(template_name, current_user)
