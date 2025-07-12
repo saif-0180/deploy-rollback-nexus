@@ -122,7 +122,13 @@ const loadTemplateMutation = useMutation({
 // Deploy using template
 const deployMutation = useMutation({
   mutationFn: async (templateName: string) => {
-    const payload = { template: templateName };
+    // const payload = { template: templateName };
+    const ftNumber = templateName.split('_')[0]; 
+
+    const payload = {
+      ft_number: ftNumber,
+      template: templateName,
+    };
     console.log("🚀 Starting deployment with payload:", payload);
 
     const response = await fetch('/api/deploy/template', {
