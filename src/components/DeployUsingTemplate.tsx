@@ -65,209 +65,208 @@ const DeployUsingTemplate: React.FC = () => {
   const { toast } = useToast();
 
   // Fetch available templates
-const { data: templatesData, isLoading: isLoadingTemplates } = useQuery({
-  queryKey: ['available-templates'],
-  queryFn: async () => {
-    console.log("📡 Fetching available templates...");
-    const response = await fetch('/api/templates');
-    console.log("📡 Status:", response.status);
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Error fetching templates:", errorText);
-      throw new Error('Failed to fetch templates');
-    }
-    const data = await response.json();
-    console.log("✅ Templates fetched:", data);
-    return data;
-  },
-  refetchInterval: 30000,
-});
-
-const availableTemplates = templatesData?.templates || [];
-
-// Load specific template
-const loadTemplateMutation = useMutation({
-  mutationFn: async (templateName: string) => {
-    console.log("📥 Loading template:", templateName);
-    const response = await fetch(`/api/template/${templateName}`);
-    console.log("📡 Status:", response.status);
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Error loading template:", errorText);
-      throw new Error('Failed to load template');
-    }
-    const data = await response.json();
-    console.log("✅ Template loaded:", data);
-    return data;
-  },
-  onSuccess: (template) => {
-    setLoadedTemplate(template);
-    console.log("✅ Loaded template state updated:", template);
-    toast({
-      title: "Success",
-      description: `Template ${selectedTemplate} loaded successfully`,
-    });
-  },
-  onError: (error) => {
-    console.error("❌ Template load failed:", error);
-    toast({
-      title: "Error",
-      description: `Failed to load template: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      variant: "destructive",
-    });
-  },
-});
-
-// Deploy using template
-const deployMutation = useMutation({
-  mutationFn: async (templateName: string) => {
-    const ftNumber = templateName.split('_')[0]; 
-
-    const payload = {
-      ft_number: ftNumber,
-      template: templateName,
-    };
-    console.log("🚀 Starting deployment with payload:", payload);
-
-    const response = await fetch('/api/deploy/template', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    console.log("📡 Deploy response status:", response.status);
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Deployment failed with server response:", errorText);
-      throw new Error('Failed to start template deployment');
-    }
-
-    const data = await response.json();
-    console.log("✅ Deployment started:", data);
-    return data;
-  },
-  onSuccess: (data) => {
-    setDeploymentId(data.deploymentId);
-    setLogStatus('running');
-    console.log("✅ Deployment ID:", data.deploymentId);
-    // Start polling logs immediately
-    if (data.deploymentId) {
-      pollLogs(data.deploymentId);
-    }
-    toast({
-      title: "Deployment Started",
-      description: `Template deployment initiated with ID: ${data.deploymentId}`,
-    });
-  },
-  onError: (error) => {
-    console.error("❌ Deployment error:", error);
-    setLogStatus('failed');
-    toast({
-      title: "Deployment Failed",
-      description: `Failed to start deployment: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      variant: "destructive",
-    });
-  },
-});
-
-// Poll logs when deployment starts
-const pollLogs = async (id: string) => {
-  try {
-    setLogStatus('loading');
-    
-    // Set up SSE for real-time logs
-    const evtSource = new EventSource(`/api/deploy/${id}/logs`);
-    
-    evtSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      
-      if (data.message) {
-        setLogs(prev => [...prev, data.message]);
+  const { data: templatesData, isLoading: isLoadingTemplates } = useQuery({
+    queryKey: ['available-templates'],
+    queryFn: async () => {
+      console.log("📡 Fetching available templates...");
+      const response = await fetch('/api/templates');
+      console.log("📡 Status:", response.status);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Error fetching templates:", errorText);
+        throw new Error('Failed to fetch templates');
       }
-      
-      if (data.status && data.status !== 'running') {
-        setLogStatus(data.status === 'success' ? 'completed' : data.status);
-        evtSource.close();
+      const data = await response.json();
+      console.log("✅ Templates fetched:", data);
+      return data;
+    },
+    refetchInterval: 30000,
+  });
+
+  const availableTemplates = templatesData?.templates || [];
+
+  // Load specific template
+  const loadTemplateMutation = useMutation({
+    mutationFn: async (templateName: string) => {
+      console.log("📥 Loading template:", templateName);
+      const response = await fetch(`/api/template/${templateName}`);
+      console.log("📡 Status:", response.status);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Error loading template:", errorText);
+        throw new Error('Failed to load template');
       }
-    };
-    
-    evtSource.onerror = () => {
-      evtSource.close();
-      // Fallback to normal polling if SSE fails
-      fetchLogs(id);
-    };
-    
-    return () => {
-      evtSource.close();
-    };
-  } catch (error) {
-    console.error('Error setting up log polling:', error);
-    // Fallback to regular polling
-    fetchLogs(id);
-  }
-};
+      const data = await response.json();
+      console.log("✅ Template loaded:", data);
+      return data;
+    },
+    onSuccess: (template) => {
+      setLoadedTemplate(template);
+      console.log("✅ Loaded template state updated:", template);
+      toast({
+        title: "Success",
+        description: `Template ${selectedTemplate} loaded successfully`,
+      });
+    },
+    onError: (error) => {
+      console.error("❌ Template load failed:", error);
+      toast({
+        title: "Error",
+        description: `Failed to load template: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
+    },
+  });
 
-const fetchLogs = async (id: string) => {
-  try {
-    const response = await fetch(`/api/deploy/${id}/logs`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch logs');
+  // Deploy using template
+  const deployMutation = useMutation({
+    mutationFn: async (templateName: string) => {
+      const ftNumber = templateName.split('_')[0]; 
+
+      const payload = {
+        ft_number: ftNumber,
+        template: templateName,
+      };
+      console.log("🚀 Starting deployment with payload:", payload);
+
+      const response = await fetch('/api/deploy/template', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      console.log("📡 Deploy response status:", response.status);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Deployment failed with server response:", errorText);
+        throw new Error('Failed to start template deployment');
+      }
+
+      const data = await response.json();
+      console.log("✅ Deployment started:", data);
+      return data;
+    },
+    onSuccess: (data) => {
+      setDeploymentId(data.deploymentId);
+      setLogStatus('running');
+      console.log("✅ Deployment ID:", data.deploymentId);
+      // Start polling template logs
+      if (data.deploymentId) {
+        pollTemplateLogs(data.deploymentId);
+      }
+      toast({
+        title: "Deployment Started",
+        description: `Template deployment initiated with ID: ${data.deploymentId}`,
+      });
+    },
+    onError: (error) => {
+      console.error("❌ Deployment error:", error);
+      setLogStatus('failed');
+      toast({
+        title: "Deployment Failed",
+        description: `Failed to start deployment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Poll template logs - using the correct template endpoint
+  const pollTemplateLogs = async (id: string) => {
+    try {
+      setLogStatus('loading');
+      
+      // Poll every 2 seconds for template logs
+      const pollInterval = setInterval(async () => {
+        try {
+          console.log(`📥 Polling template logs for deployment: ${id}`);
+          const response = await fetch(`/api/template-deploy/${id}/logs`);
+          
+          if (!response.ok) {
+            console.error(`❌ Failed to fetch template logs: ${response.status}`);
+            clearInterval(pollInterval);
+            setLogStatus('failed');
+            return;
+          }
+          
+          const data = await response.json();
+          console.log(`✅ Template logs received:`, data);
+          
+          if (data.logs && Array.isArray(data.logs)) {
+            setLogs(data.logs);
+          }
+          
+          if (data.status) {
+            const status = data.status;
+            console.log(`📊 Template deployment status: ${status}`);
+            
+            if (status === 'success') {
+              setLogStatus('completed');
+              clearInterval(pollInterval);
+            } else if (status === 'failed') {
+              setLogStatus('failed');
+              clearInterval(pollInterval);
+            } else if (status === 'running') {
+              setLogStatus('running');
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error polling template logs:', error);
+          clearInterval(pollInterval);
+          setLogStatus('failed');
+        }
+      }, 2000);
+      
+      // Clean up interval after 10 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (logStatus === 'running') {
+          setLogStatus('completed');
+        }
+      }, 600000);
+      
+    } catch (error) {
+      console.error('❌ Error setting up template log polling:', error);
+      setLogStatus('failed');
     }
-    
-    const data = await response.json();
-    setLogs(data.logs || []);
-    
-    if (data.status) {
-      setLogStatus(data.status === 'success' ? 'completed' : data.status);
+  };
+
+  const handleLoadTemplate = () => {
+    if (!selectedTemplate) {
+      toast({
+        title: "Error",
+        description: "Please select a template",
+        variant: "destructive",
+      });
+      return;
     }
-    
-    // Continue polling if still running
-    if (data.status === 'running') {
-      setTimeout(() => fetchLogs(id), 2000);
+
+    console.log("🧩 Handle load template:", selectedTemplate);
+    loadTemplateMutation.mutate(selectedTemplate);
+  };
+
+  const getStepTypeIcon = (type: string) => {
+    switch (type) {
+      case 'file_deployment': return '📁';
+      case 'sql_deployment': return '🗄️';
+      case 'service_restart': return '🔄';
+      case 'ansible_playbook': return '🎭';
+      case 'helm_upgrade': return '⚙️';
+      default: return '📋';
     }
-  } catch (error) {
-    console.error('Error fetching logs:', error);
-    setLogStatus('failed');
-  }
-};
+  };
 
-const handleLoadTemplate = () => {
-  if (!selectedTemplate) {
-    toast({
-      title: "Error",
-      description: "Please select a template",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  console.log("🧩 Handle load template:", selectedTemplate);
-  loadTemplateMutation.mutate(selectedTemplate);
-};
-
-const getStepTypeIcon = (type: string) => {
-  switch (type) {
-    case 'file_deployment': return '📁';
-    case 'sql_deployment': return '🗄️';
-    case 'service_restart': return '🔄';
-    case 'ansible_playbook': return '🎭';
-    case 'helm_upgrade': return '⚙️';
-    default: return '📋';
-  }
-};
-
-const getStepTypeLabel = (type: string) => {
-  switch (type) {
-    case 'file_deployment': return 'File Deployment';
-    case 'sql_deployment': return 'SQL Deployment';
-    case 'service_restart': return 'Service Management';
-    case 'ansible_playbook': return 'Ansible Playbook';
-    case 'helm_upgrade': return 'Helm Upgrade';
-    default: return type;
-  }
-};
+  const getStepTypeLabel = (type: string) => {
+    switch (type) {
+      case 'file_deployment': return 'File Deployment';
+      case 'sql_deployment': return 'SQL Deployment';
+      case 'service_restart': return 'Service Management';
+      case 'ansible_playbook': return 'Ansible Playbook';
+      case 'helm_upgrade': return 'Helm Upgrade';
+      default: return type;
+    }
+  };
 
   return (
     <div className="space-y-6">

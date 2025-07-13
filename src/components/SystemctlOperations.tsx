@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import LogDisplay from '@/components/LogDisplay';
 import { Loader2, RefreshCw } from 'lucide-react';
 import VMSelector from '@/components/VMSelector';
-import { DeploymentStatus } from '@/components/ui/types';
 
 interface SystemctlOperation {
   service: string;
@@ -35,7 +35,7 @@ const SystemctlOperations: React.FC = () => {
   const queryClient = useQueryClient();
   const [operation, setOperation] = useState<SystemctlOperation>(initialOperation);
   const [logs, setLogs] = useState<string[]>([]);
-  const [logStatus, setLogStatus] = useState<DeploymentStatus>('idle');
+  const [logStatus, setLogStatus] = useState<'idle' | 'loading' | 'running' | 'success' | 'failed' | 'completed'>('idle');
   const [lastRefreshedTime, setLastRefreshedTime] = useState<string>(new Date().toLocaleTimeString());
   const [selectedVMs, setSelectedVMs] = useState<string[]>([]);
 
@@ -162,7 +162,7 @@ const SystemctlOperations: React.FC = () => {
 
               <div>
                 <Label className="text-[#F79B72]">Target VMs</Label>
-                <VMSelector onVMsChange={handleVMSelection} />
+                <VMSelector onVMChange={handleVMSelection} />
               </div>
               
               <Button 
