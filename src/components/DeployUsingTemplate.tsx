@@ -1,9 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from '@/contexts/AuthContext';
@@ -181,7 +185,7 @@ const DeployUsingTemplate: React.FC = () => {
       const pollInterval = setInterval(async () => {
         try {
           console.log(`📥 Polling template logs for deployment: ${id}`);
-          const response = await fetch(`/api/template-deploy/${id}/logs`);
+          const response = await fetch(`/api/deploy/${id}/logs`);
           
           if (!response.ok) {
             console.error(`❌ Failed to fetch template logs: ${response.status}`);
