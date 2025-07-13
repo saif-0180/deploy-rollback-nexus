@@ -28,6 +28,12 @@ FIX_FILES_DIR = "/app/fixfiles"
 TEMPLATE_DEPLOYMENTS_STORAGE = {}
 TEMPLATE_HISTORY_FILE = os.path.join(TEMPLATE_LOGS_DIR, 'template_deployments.json')
 
+
+@app.before_first_request
+def initialize_template_deployments():
+    load_template_deployments()
+
+    
 def load_template_deployments():
     """Load template deployments from file"""
     global TEMPLATE_DEPLOYMENTS_STORAGE
