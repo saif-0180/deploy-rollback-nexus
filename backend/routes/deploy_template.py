@@ -14,8 +14,10 @@ import logging
 # Create the blueprint
 deploy_template_bp = Blueprint('deploy_template', __name__)
 
+
 # Set up logging
-logger = logging.getLogger('template_deployment')
+# logger = logging.getLogger('template_deployment')
+logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # Deploy directory for logs
@@ -238,6 +240,84 @@ def get_template_details(template_name):
         logger.error(f"Failed to get template details: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+# @deploy_template_bp.route('/api/deploy/template', methods=['POST'])
+# def deploy_template():
+#     """Start template deployment"""
+#     deployment_id = None
+#     try:
+#         logger.info("=== TEMPLATE DEPLOYMENT REQUEST RECEIVED ===")
+        
+#         data = request.json
+#         logger.debug(f"Request data received: {data}")
+        
+#         template_name = data.get('template')
+#         ft_number = data.get('ft_number', '')
+#         variables = data.get('variables', {})
+        
+#         logger.info(f"Processing template deployment request: template='{template_name}', ft_number='{ft_number}'")
+        
+#         if not template_name:
+#             logger.error("Missing template name in the request")
+#             return jsonify({"error": "Missing template name"}), 400
+        
+#         # Generate a unique deployment ID
+#         deployment_id = str(uuid.uuid4())
+#         logger.info(f"Generated deployment ID: {deployment_id}")
+        
+#         # Prepare deployment data - FIXED SYNTAX ERROR HERE
+#         deployment_data = {
+#             "id": deployment_id,
+#             "template": template_name,
+#             "ft_number": ft_number,
+#             "variables": variables,
+#             "status": "running",
+#             "timestamp": time.time(),
+#             "logs": [],
+#             "logged_in_user": "infadm"
+#         }
+        
+#         # Log the deployment data
+#         logger.debug("Deployment data dictionary created:")
+#         logger.debug(json.dumps(deployment_data, indent=2, default=str))
+
+#         # Store in global template deployments
+#         TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id] = deployment_data
+#         logger.debug(f"Stored deployment in TEMPLATE_DEPLOYMENTS_STORAGE under key {deployment_id}")
+#         save_template_deployments()
+#         logger.info(f"Stored template deployment. Total count: {len(TEMPLATE_DEPLOYMENTS_STORAGE)}")
+        
+#         # Log initial message in logs
+#         log_template_message(deployment_id, f"Template deployment initiated: {template_name}")
+#         logger.info(f"Initial log message recorded for deployment ID: {deployment_id}")
+        
+#         # Start background thread
+#         logger.info(f"Starting background thread for template deployment ID: {deployment_id}")
+#         deployment_thread = threading.Thread(
+#             target=process_template_deployment_wrapper,
+#             args=(deployment_id, template_name, ft_number, variables),
+#             daemon=True,
+#             name=f"template-deploy-{deployment_id[:8]}"
+#         )
+#         deployment_thread.start()
+#         logger.info(f"Background thread '{deployment_thread.name}' started successfully")
+
+#         logger.info(f"Template deployment successfully initiated with ID: {deployment_id}")
+#         return jsonify({"deploymentId": deployment_id})
+
+#     except Exception as e:
+#         logger.error(f"Error during template deployment: {str(e)}")
+#         logger.exception("Full exception traceback:")
+
+#         # Attempt to mark the deployment as failed
+#         if deployment_id and deployment_id in TEMPLATE_DEPLOYMENTS_STORAGE:
+#             try:
+#                 TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]["status"] = "failed"
+#                 log_template_message(deployment_id, f"ERROR: {str(e)}")
+#             except Exception as update_error:
+#                 logger.error(f"Failed to update status or log error message for deployment {deployment_id}: {update_error}")
+        
+#         return jsonify({"error": str(e)}), 500
+
 @deploy_template_bp.route('/api/deploy/template', methods=['POST'])
 def deploy_template():
     """Start template deployment"""
@@ -245,9 +325,19 @@ def deploy_template():
     try:
         logger.info("=== TEMPLATE DEPLOYMENT REQUEST RECEIVED ===")
         
-        data = request.json
+        # Validate request content type
+        if not request.is_json:
+            logger.error("Request content type is not JSON")
+            return jsonify({"error": "Content-Type must be application/json"}), 400
+        
+        data = request.get_json()
+        if not data:
+            logger.error("No JSON data in request body")
+            return jsonify({"error": "No JSON data provided"}), 400
+        
         logger.debug(f"Request data received: {data}")
         
+        # Extract and validate required fields
         template_name = data.get('template')
         ft_number = data.get('ft_number', '')
         variables = data.get('variables', {})
@@ -256,43 +346,61 @@ def deploy_template():
         
         if not template_name:
             logger.error("Missing template name in the request")
-            return jsonify({"error": "Missing template name"}), 400
+            return jsonify({"error": "Template name is required"}), 400
+        
+        if not isinstance(template_name, str) or not template_name.strip():
+            logger.error("Invalid template name provided")
+            return jsonify({"error": "Template name must be a non-empty string"}), 400
+        
+        if not isinstance(variables, dict):
+            logger.error("Variables must be a dictionary")
+            return jsonify({"error": "Variables must be a dictionary"}), 400
         
         # Generate a unique deployment ID
         deployment_id = str(uuid.uuid4())
         logger.info(f"Generated deployment ID: {deployment_id}")
         
-        # Prepare deployment data - FIXED SYNTAX ERROR HERE
+        # Prepare deployment data
         deployment_data = {
             "id": deployment_id,
-            "template": template_name,
+            "template": template_name.strip(),
             "ft_number": ft_number,
             "variables": variables,
             "status": "running",
             "timestamp": time.time(),
             "logs": [],
-            "logged_in_user": "infadm"
+            "logged_in_user": "infadm",
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         }
         
-        # Log the deployment data
+        # Log the deployment data (with better formatting)
         logger.debug("Deployment data dictionary created:")
         logger.debug(json.dumps(deployment_data, indent=2, default=str))
 
         # Store in global template deployments
         TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id] = deployment_data
         logger.debug(f"Stored deployment in TEMPLATE_DEPLOYMENTS_STORAGE under key {deployment_id}")
-        save_template_deployments()
-        logger.info(f"Stored template deployment. Total count: {len(TEMPLATE_DEPLOYMENTS_STORAGE)}")
+        
+        # Save deployments to persistent storage
+        try:
+            save_template_deployments()
+            logger.info(f"Stored template deployment. Total count: {len(TEMPLATE_DEPLOYMENTS_STORAGE)}")
+        except Exception as save_error:
+            logger.error(f"Failed to save template deployments: {save_error}")
+            # Don't fail the request, but log the error
         
         # Log initial message in logs
-        log_template_message(deployment_id, f"Template deployment initiated: {template_name}")
-        logger.info(f"Initial log message recorded for deployment ID: {deployment_id}")
+        try:
+            log_template_message(deployment_id, f"Template deployment initiated: {template_name}")
+            logger.info(f"Initial log message recorded for deployment ID: {deployment_id}")
+        except Exception as log_error:
+            logger.error(f"Failed to log initial message: {log_error}")
         
         # Start background thread
         logger.info(f"Starting background thread for template deployment ID: {deployment_id}")
         deployment_thread = threading.Thread(
             target=process_template_deployment_wrapper,
-            args=(deployment_id, template_name, ft_number, variables),
+            args=(deployment_id, template_name.strip(), ft_number, variables),
             daemon=True,
             name=f"template-deploy-{deployment_id[:8]}"
         )
@@ -300,7 +408,11 @@ def deploy_template():
         logger.info(f"Background thread '{deployment_thread.name}' started successfully")
 
         logger.info(f"Template deployment successfully initiated with ID: {deployment_id}")
-        return jsonify({"deploymentId": deployment_id})
+        return jsonify({
+            "deploymentId": deployment_id,
+            "status": "initiated",
+            "message": "Template deployment started successfully"
+        }), 202  # 202 Accepted is more appropriate for async operations
 
     except Exception as e:
         logger.error(f"Error during template deployment: {str(e)}")
@@ -310,11 +422,17 @@ def deploy_template():
         if deployment_id and deployment_id in TEMPLATE_DEPLOYMENTS_STORAGE:
             try:
                 TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]["status"] = "failed"
+                TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]["error"] = str(e)
                 log_template_message(deployment_id, f"ERROR: {str(e)}")
+                save_template_deployments()
             except Exception as update_error:
                 logger.error(f"Failed to update status or log error message for deployment {deployment_id}: {update_error}")
         
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": "Internal server error during template deployment",
+            "deploymentId": deployment_id
+        }), 500
+
 
 def process_template_deployment_wrapper(deployment_id, template_name, ft_number, variables):
     """Wrapper function to handle exceptions in the deployment thread"""
