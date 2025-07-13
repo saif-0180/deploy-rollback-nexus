@@ -187,7 +187,7 @@ def deploy_template():
 
         logger.debug(f"Created deployment data: {deployment_data}")
 
-        threading.Thread(target=process_template_deployment_wrapper, args=(deployment_id, template_name, ft_number, variables)).start()
+        threading.Thread(target=process_template_deployment, args=(deployment_id, template_name, ft_number, variables)).start()
     
         logger.info(f"Template deployment initiated with ID: {deployment_id}")
         return jsonify({"deploymentId": deployment_id})
