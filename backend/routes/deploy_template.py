@@ -249,10 +249,10 @@ def deploy_template():
     #         "message": "Template deployment started successfully"
     #     }), 202
 
-    # except Exception as e:
-    #     logger.error(f"CRITICAL ERROR during template deployment: {e}")
-    #     logger.error(f"Full traceback: {traceback.format_exc()}")
-    #     return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"CRITICAL ERROR during template deployment: {e}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return jsonify({"error": str(e)}), 500
 
 # def process_template_deployment_wrapper(deployment_id, template_name, ft_number, variables):
 
