@@ -6,9 +6,10 @@ import threading
 import time
 import uuid
 import base64
+import shutil
+import tempfile
 from flask import current_app, Blueprint, jsonify, request
 import logging
-import tempfile
 
 # Create the blueprint
 deploy_template_bp = Blueprint('deploy_template', __name__)
@@ -29,112 +30,33 @@ FIX_FILES_DIR = "/app/fixfiles"
 TEMPLATE_DEPLOYMENTS_STORAGE = {}
 TEMPLATE_HISTORY_FILE = os.path.join(TEMPLATE_LOGS_DIR, 'template_deployments.json')
 
-
 def load_template_deployments():
+    """Load template deployments from file"""
+    global TEMPLATE_DEPLOYMENTS_STORAGE
     try:
+        logger.debug(f"Loading template deployments from {TEMPLATE_HISTORY_FILE}")
+        
         if not os.path.exists(TEMPLATE_HISTORY_FILE):
-            logger.debug(f"No deployment file found at {TEMPLATE_HISTORY_FILE}. Returning empty storage.")
-            return {}
+            logger.debug(f"No deployment file found at {TEMPLATE_HISTORY_FILE}. Creating empty storage.")
+            TEMPLATE_DEPLOYMENTS_STORAGE = {}
+            return TEMPLATE_DEPLOYMENTS_STORAGE
 
         with open(TEMPLATE_HISTORY_FILE, 'r') as f:
             content = f.read().strip()
             if not content:
-                raise ValueError("Deployment file is empty.")
-            deployments = json.loads(content)
-            logger.debug(f"Loaded {len(deployments)} deployments from file.")
-            return deployments
+                logger.debug("Deployment file is empty. Creating empty storage.")
+                TEMPLATE_DEPLOYMENTS_STORAGE = {}
+                return TEMPLATE_DEPLOYMENTS_STORAGE
+            
+            TEMPLATE_DEPLOYMENTS_STORAGE = json.loads(content)
+            logger.debug(f"Loaded {len(TEMPLATE_DEPLOYMENTS_STORAGE)} deployments from file.")
+            return TEMPLATE_DEPLOYMENTS_STORAGE
+            
     except Exception as e:
         logger.error(f"Error loading template deployments: {e}")
-        return {}
+        TEMPLATE_DEPLOYMENTS_STORAGE = {}
+        return TEMPLATE_DEPLOYMENTS_STORAGE
 
-# def load_template_deployments():
-#     """Load template deployments from file"""
-#     global TEMPLATE_DEPLOYMENTS_STORAGE
-#     try:
-#         if os.path.exists(TEMPLATE_HISTORY_FILE):
-#             with open(TEMPLATE_HISTORY_FILE, 'r') as f:
-#                 TEMPLATE_DEPLOYMENTS_STORAGE = json.load(f)
-#             logger.debug(f"Loaded {len(TEMPLATE_DEPLOYMENTS_STORAGE)} template deployments from file")
-#         else:
-#             TEMPLATE_DEPLOYMENTS_STORAGE = {}
-#             logger.debug("No template deployment history file found, starting fresh")
-#     except Exception as e:
-#         logger.error(f"Error loading template deployments: {str(e)}")
-#         TEMPLATE_DEPLOYMENTS_STORAGE = {}
-
-# def save_template_deployments():
-#     """Save template deployments to file"""
-#     try:
-#         os.makedirs(TEMPLATE_LOGS_DIR, exist_ok=True)
-#         with open(TEMPLATE_HISTORY_FILE, 'w') as f:
-#             json.dump(TEMPLATE_DEPLOYMENTS_STORAGE, f, indent=2, default=str)
-#         logger.debug(f"Saved {len(TEMPLATE_DEPLOYMENTS_STORAGE)} template deployments to file")
-#     except Exception as e:
-#         logger.error(f"Error saving template deployments: {str(e)}")
-
-# def save_template_deployments():
-#     """Save template deployments to file"""
-#     try:
-#         os.makedirs(TEMPLATE_LOGS_DIR, exist_ok=True)
-        
-#         # Create a backup of existing file before saving
-#         if os.path.exists(TEMPLATE_HISTORY_FILE):
-#             backup_file = f"{TEMPLATE_HISTORY_FILE}.backup"
-#             import shutil
-#             shutil.copy2(TEMPLATE_HISTORY_FILE, backup_file)
-        
-#         with open(TEMPLATE_HISTORY_FILE, 'w') as f:
-#             json.dump(TEMPLATE_DEPLOYMENTS_STORAGE, f, indent=2, default=str)
-#         logger.debug(f"Saved {len(TEMPLATE_DEPLOYMENTS_STORAGE)} template deployments to file")
-        
-#     except Exception as e:
-#         logger.error(f"Error saving template deployments: {str(e)}")
-#         # Try to restore from backup if save failed
-#         backup_file = f"{TEMPLATE_HISTORY_FILE}.backup"
-#         if os.path.exists(backup_file):
-#             try:
-#                 import shutil
-#                 shutil.copy2(backup_file, TEMPLATE_HISTORY_FILE)
-#                 logger.info("Restored template deployments from backup")
-#             except:
-#                 logger.error("Failed to restore from backup")
-
-# def save_template_deployments():
-#     """Save template deployments to file"""
-#     try:
-#         logger.debug("Ensuring logs directory exists...")
-#         os.makedirs(TEMPLATE_LOGS_DIR, exist_ok=True)
-#         logger.debug(f"Logs directory ready at {TEMPLATE_LOGS_DIR}")
-        
-#         # Create a backup of existing file before saving
-#         if os.path.exists(TEMPLATE_HISTORY_FILE):
-#             logger.debug(f"Found existing template history file: {TEMPLATE_HISTORY_FILE}")
-#             backup_file = f"{TEMPLATE_HISTORY_FILE}.backup"
-#             import shutil
-#             shutil.copy2(TEMPLATE_HISTORY_FILE, backup_file)
-#             logger.debug(f"Created backup of template history: {backup_file}")
-#         else:
-#             logger.debug("No existing template history file found. Skipping backup step.")
-        
-#         logger.debug(f"Saving template deployments to file: {TEMPLATE_HISTORY_FILE}")
-#         with open(TEMPLATE_HISTORY_FILE, 'w') as f:
-#             json.dump(TEMPLATE_DEPLOYMENTS_STORAGE, f, indent=2, default=str)
-#         logger.debug(f"Saved {len(TEMPLATE_DEPLOYMENTS_STORAGE)} template deployments to file")
-        
-#     except Exception as e:
-#         logger.error(f"Error saving template deployments: {str(e)}")
-#         # Try to restore from backup if save failed
-#         backup_file = f"{TEMPLATE_HISTORY_FILE}.backup"
-#         if os.path.exists(backup_file):
-#             logger.debug("Attempting to restore from backup...")
-#             try:
-#                 import shutil
-#                 shutil.copy2(backup_file, TEMPLATE_HISTORY_FILE)
-#                 logger.info("Restored template deployments from backup")
-#             except Exception as restore_error:
-#                 logger.error(f"Failed to restore from backup: {str(restore_error)}")
-#         else:
-#             logger.debug("No backup file found to restore from.")
 def save_template_deployments():
     """Save template deployments to file atomically"""
     try:
@@ -160,6 +82,7 @@ def save_template_deployments():
         # Replace original with temp
         os.replace(temp_path, TEMPLATE_HISTORY_FILE)
         logger.debug(f"Replaced {TEMPLATE_HISTORY_FILE} with new data.")
+        logger.info(f"Saved {len(TEMPLATE_DEPLOYMENTS_STORAGE)} template deployments to file")
 
     except Exception as e:
         logger.error(f"Error saving template deployments: {str(e)}")
@@ -173,21 +96,6 @@ def save_template_deployments():
                 logger.error(f"Failed to restore from backup: {str(restore_error)}")
         else:
             logger.debug("No backup file found to restore from.")
-
-
-# def log_template_message(deployment_id, message):
-#     """Log message for template deployments"""
-#     timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-#     formatted_message = f"[{timestamp}] {message}"
-    
-#     logger.info(f"[{deployment_id}] {message}")
-    
-#     # Store in global template deployments
-#     if deployment_id in TEMPLATE_DEPLOYMENTS_STORAGE:
-#         if 'logs' not in TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]:
-#             TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]['logs'] = []
-#         TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]['logs'].append(formatted_message)
-        # save_template_deployments()
 
 def log_template_message(deployment_id, message):
     """Log message for template deployments"""
@@ -274,8 +182,6 @@ def load_template(template_name):
         return None
 
 # Load template deployments on startup
-# load_template_deployments()
-
 try:
     load_template_deployments()
     logger.info(f"Template deployments loaded successfully. Count: {len(TEMPLATE_DEPLOYMENTS_STORAGE)}")
@@ -332,75 +238,6 @@ def get_template_details(template_name):
         logger.error(f"Failed to get template details: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# @deploy_template_bp.route('/api/deploy/template', methods=['POST'])
-# def deploy_template():
-#     """Start template deployment"""
-#     deployment_id = None
-#     try:
-#         logger.info("=== TEMPLATE DEPLOYMENT REQUEST RECEIVED ===")
-#         data = request.json
-#         logger.debug(f"Request data: {data}")
-        
-#         template_name = data.get('template')
-#         ft_number = data.get('ft_number', '')
-#         variables = data.get('variables', {})
-        
-#         logger.info(f"Template deployment request: template={template_name}, ft_number={ft_number}")
-        
-#         if not template_name:
-#             logger.error("Missing template name for template deployment")
-#             return jsonify({"error": "Missing template name"}), 400
-        
-#         # Generate a unique deployment ID
-#         deployment_id = str(uuid.uuid4())
-#         logger.info(f"Generated deployment ID: {deployment_id}")
-        
-#         # Store deployment information in global storage
-#         deployment_data = {
-#             "id": deployment_id,
-#             "template": template_name,
-#             "ft_number": ft_number,
-#             "variables": variables,
-#             "status": "running",
-#             "timestamp": time.time(),
-#             "logs": [],
-#             "logged_in_user": "infadm"
-#         }
-        
-#         # Store in global template deployments
-#         TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id] = deployment_data
-#         save_template_deployments()
-#         logger.info(f"Stored template deployment. Total template deployments: {len(TEMPLATE_DEPLOYMENTS_STORAGE)}")
-        
-#         # Log initial message
-#         log_template_message(deployment_id, f"Template deployment initiated: {template_name}")
-#         logger.info(f"Logged initial message for template deployment {deployment_id}")
-        
-#         # Start deployment in a separate thread
-#         logger.info(f"Creating background thread for template deployment {deployment_id}")
-#         deployment_thread = threading.Thread(
-#             target=process_template_deployment_wrapper, 
-#             args=(deployment_id, template_name, ft_number, variables),
-#             daemon=True,
-#             name=f"template-deploy-{deployment_id[:8]}"
-#         )
-#         deployment_thread.start()
-#         logger.info(f"Background thread '{deployment_thread.name}' started successfully")
-        
-#         logger.info(f"Template deployment initiated with ID: {deployment_id}")
-#         return jsonify({"deploymentId": deployment_id})
-        
-#     except Exception as e:
-#         logger.error(f"Error starting template deployment: {str(e)}")
-#         logger.exception("Full exception details:")
-#         if deployment_id and deployment_id in TEMPLATE_DEPLOYMENTS_STORAGE:
-#             try:
-#                 TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]["status"] = "failed"
-#                 log_template_message(deployment_id, f"ERROR: {str(e)}")
-#             except:
-#                 pass
-#         return jsonify({"error": str(e)}), 500
-
 @deploy_template_bp.route('/api/deploy/template', methods=['POST'])
 def deploy_template():
     """Start template deployment"""
@@ -425,8 +262,8 @@ def deploy_template():
         deployment_id = str(uuid.uuid4())
         logger.info(f"Generated deployment ID: {deployment_id}")
         
-        # Prepare deployment data
-        deployment_data[deployment_id]= {
+        # Prepare deployment data - FIXED SYNTAX ERROR HERE
+        deployment_data = {
             "id": deployment_id,
             "template": template_name,
             "ft_number": ft_number,
@@ -437,12 +274,12 @@ def deploy_template():
             "logged_in_user": "infadm"
         }
         
-        # Log the full deployment data dictionary
+        # Log the deployment data
         logger.debug("Deployment data dictionary created:")
         logger.debug(json.dumps(deployment_data, indent=2, default=str))
 
         # Store in global template deployments
-        TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id] = deployment_data[deployment_id]
+        TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id] = deployment_data
         logger.debug(f"Stored deployment in TEMPLATE_DEPLOYMENTS_STORAGE under key {deployment_id}")
         save_template_deployments()
         logger.info(f"Stored template deployment. Total count: {len(TEMPLATE_DEPLOYMENTS_STORAGE)}")
@@ -478,7 +315,6 @@ def deploy_template():
                 logger.error(f"Failed to update status or log error message for deployment {deployment_id}: {update_error}")
         
         return jsonify({"error": str(e)}), 500
-
 
 def process_template_deployment_wrapper(deployment_id, template_name, ft_number, variables):
     """Wrapper function to handle exceptions in the deployment thread"""
@@ -574,6 +410,8 @@ def process_template_deployment(deployment_id, template_name, ft_number, variabl
             save_template_deployments()
         except:
             logger.error("Failed to update deployment status after error")
+
+# ... keep existing code (all execution step functions remain the same)
 
 def execute_file_deployment_step(deployment_id, step, inventory):
     """Execute file deployment step"""
@@ -785,34 +623,6 @@ def execute_helm_upgrade_step(deployment_id, step, inventory):
     except Exception as e:
         logger.error(f"Helm upgrade step failed: {str(e)}")
         raise
-
-# @deploy_template_bp.route('/api/template-deploy/<deployment_id>/logs', methods=['GET'])
-# def get_template_deployment_logs(deployment_id):
-#     """Get template deployment logs"""
-#     try:
-#         logger.debug(f"Looking for template deployment: {deployment_id}")
-        
-#         if deployment_id not in TEMPLATE_DEPLOYMENTS_STORAGE:
-#             logger.warning(f"Template deployment {deployment_id} not found")
-#             return jsonify({"error": "Template deployment not found"}), 404
-        
-#         deployment = TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]
-#         logs = deployment.get('logs', [])
-        
-#         logger.debug(f"Found template deployment {deployment_id} with {len(logs)} log entries")
-        
-#         return jsonify({
-#             "deploymentId": deployment_id,
-#             "status": deployment.get('status', 'unknown'),
-#             "logs": logs,
-#             "timestamp": deployment.get('timestamp'),
-#             "template": deployment.get('template', ''),
-#             "ft_number": deployment.get('ft_number', '')
-#         })
-        
-#     except Exception as e:
-#         logger.error(f"Error fetching template deployment logs for {deployment_id}: {str(e)}")
-#         return jsonify({"error": str(e)}), 500
 
 @deploy_template_bp.route('/api/template-deploy/<deployment_id>/logs', methods=['GET'])
 def get_template_deployment_logs(deployment_id):
