@@ -369,7 +369,7 @@ def deploy_template():
         logger.info(f"Generated deployment ID: {deployment_id}")
         
         # Prepare deployment data
-        deployment_data[deployment_id]= {
+        TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]= {
             "id": deployment_id,
             "template": template_name,
             "ft_number": ft_number,
@@ -385,7 +385,7 @@ def deploy_template():
         logger.debug(json.dumps(deployment_data, indent=2, default=str))
 
         # Store in global template deployments
-        TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id] = deployment_data
+        # TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id] = deployment_data[deployment_id]
         logger.debug(f"Stored deployment in TEMPLATE_DEPLOYMENTS_STORAGE under key {deployment_id}")
         save_template_deployments()
         logger.info(f"Stored template deployment. Total count: {len(TEMPLATE_DEPLOYMENTS_STORAGE)}")
