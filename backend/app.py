@@ -27,9 +27,6 @@ from routes.deploy_template import deploy_template_bp
 
 app = Flask(__name__, static_folder='../frontend/dist')
 
-app.deployments = deployments
-app.save_deployment_history = save_deployment_history
-app.log_message = log_message
 
 # Register the blueprint
 app.register_blueprint(db_routes)
