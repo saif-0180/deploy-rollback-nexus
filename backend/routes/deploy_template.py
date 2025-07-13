@@ -6,7 +6,7 @@ import uuid
 import logging
 import traceback
 from flask import Blueprint, jsonify, request
-from app import deployments, save_deployment_history, log_message
+
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +73,7 @@ def get_template_details(template_name):
 
 @deploy_template_bp.route('/api/deploy/template', methods=['POST'])
 def deploy_template():
+    from app import deployments, save_deployment_history
     try:
         logger.info("=== TEMPLATE DEPLOYMENT REQUEST RECEIVED ===")
 
@@ -119,8 +120,9 @@ def deploy_template():
         return jsonify({"error": str(e)}), 500
 
 def process_template_deployment(deployment_id, template_name, ft_number, variables):
+    from app import log_message, deployments, save_deployment_history
     try:
-        from app import log_message, deployments, save_deployment_history
+        
         logger.info(f"[{deployment_id}] Starting template deployment processing")
 
         deployment = deployments.get(deployment_id)
