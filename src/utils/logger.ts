@@ -14,9 +14,6 @@ export interface LogEntry {
   context?: Record<string, any>;
 }
 
-// Default log file path (will be mounted from host)
-const LOG_FILE_PATH = process.env.LOG_FILE_PATH || '/app/logs/application.log';
-
 class Logger {
   private static instance: Logger;
   
@@ -43,25 +40,24 @@ class Logger {
       context
     };
     
-    // Log to console
+    // Log to console with consistent formatting
     const consoleMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+    const contextStr = context ? JSON.stringify(context) : '';
+    
     switch (level) {
       case 'debug':
-        console.debug(consoleMessage, context || '');
+        console.debug(consoleMessage, contextStr);
         break;
       case 'info':
-        console.info(consoleMessage, context || '');
+        console.info(consoleMessage, contextStr);
         break;
       case 'warn':
-        console.warn(consoleMessage, context || '');
+        console.warn(consoleMessage, contextStr);
         break;
       case 'error':
-        console.error(consoleMessage, context || '');
+        console.error(consoleMessage, contextStr);
         break;
     }
-    
-    // In browser environment, we don't directly write to files
-    // The backend will handle file logging
   }
 
   public debug(message: string, context?: Record<string, any>): void {

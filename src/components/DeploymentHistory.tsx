@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,7 @@ import { toLocaleStringWithTimezone, getCurrentTimeInTimezone } from '@/utils/ti
 
 interface Deployment {
   id: string;
-  type: 'file' | 'sql' | 'systemd' | 'command' | 'rollback' | string; 
+  type: 'file' | 'sql' | 'systemd' | 'command' | 'rollback' | 'template' | string; 
   status: 'running' | 'success' | 'failed' | string;
   timestamp: string;
   ft?: string;
@@ -24,6 +25,7 @@ interface Deployment {
   logs?: string[];
   original_deployment?: string;
   logged_in_user?: string;
+  template?: string;
 }
 
 const DeploymentHistory: React.FC = () => {
@@ -249,6 +251,8 @@ const DeploymentHistory: React.FC = () => {
         return `${userPrefix}Command: ${deployment.command ? `${deployment.command.substring(0, 30)}${deployment.command.length > 30 ? '...' : ''}` : 'N/A'}, Status=${deployment.status}, ${dateTime}`;
       case 'rollback':
         return `${userPrefix}Rollback: ${deployment.ft || 'N/A'}/${deployment.file || 'N/A'}, Status=${deployment.status}, ${dateTime}`;
+      case 'template':
+        return `${userPrefix}Template: ${deployment.template || 'N/A'}, Status=${deployment.status}, ${dateTime}`;
       default:
         return `${userPrefix}${deployment.type} (${deployment.status}), ${dateTime}`;
     }
@@ -309,6 +313,8 @@ const DeploymentHistory: React.FC = () => {
       if (deployment.vms) {
         details += `VMs: ${deployment.vms.join(', ')}\n`;
       }
+    } else if (deployment.type === 'template') {
+      details += `Template: ${deployment.template || 'N/A'}\n`;
     }
     
     details += `Status: ${deployment.status}\n`;
@@ -319,7 +325,7 @@ const DeploymentHistory: React.FC = () => {
 
   // Get deployment details safely with a fallback
   const getSelectedDeployment = (): Deployment | undefined => {
-    if (!selectedDeploymentId || !deployments) return undefined;
+    if (!selectedDeploymentId || !deployments) return undefined;  
     return deployments.find(d => d.id === selectedDeploymentId);
   };
 
@@ -335,6 +341,8 @@ const DeploymentHistory: React.FC = () => {
       `File: FT=${deployment.ft || 'N/A'}, File=${deployment.file || 'N/A'}` :
       deployment.type === 'systemd' ?
       `Systemctl: ${deployment.operation || 'N/A'} ${deployment.service || 'N/A'}` :
+      deployment.type === 'template' ?
+      `Template: ${deployment.template || 'N/A'}` :
       deployment.type;
     
     const statusInfo = `Status=${deployment.status}`;
@@ -451,7 +459,7 @@ const DeploymentHistory: React.FC = () => {
             logs={deploymentLogs} 
             height="400px" 
             title={`Deployment Details - ${getDeploymentSummary()}`}
-            status={logStatus}
+            status={logStatus as "idle" | "loading" | "running" | "success" | "failed" | "completed"}
           />
           
           {selectedDeploymentId && getSelectedDeployment()?.type === 'file' && 
