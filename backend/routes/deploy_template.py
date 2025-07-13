@@ -23,63 +23,39 @@ INVENTORY_FILE = "/app/inventory/inventory.json"
 DB_INVENTORY_FILE = "/app/inventory/db_inventory.json"
 FIX_FILES_DIR = "/app/fixfiles"
 
-# Template deployments dictionary - separate from main deployments
-template_deployments = {}
-
-def get_app_globals():
-    """Get shared objects from the main app via current_app context"""
+def get_shared_resources():
+    """Get shared resources from the main app"""
     try:
-        # Use separate template deployments dictionary
+        # Ensure template_deployments exists in current_app
         if not hasattr(current_app, 'template_deployments'):
             current_app.template_deployments = {}
         
-        # Access save_deployment_history function
-        save_deployment_history = getattr(current_app, 'save_deployment_history', None)
-        if save_deployment_history is None:
-            save_deployment_history = current_app.config.get('save_deployment_history')
+        # Get the main app's deployment functions
+        from app import log_message, save_deployment_history
         
-        # Create fallback function if needed
-        if not save_deployment_history:
-            logger.warning("save_deployment_history function is None, creating fallback")
-            def fallback_save():
-                logger.debug("Fallback save_deployment_history called")
-                pass
-            save_deployment_history = fallback_save
-        
-        # Load inventory
+        # Load inventory files
         inventory = load_inventory_files()
         
-        logger.debug(f"Retrieved app globals for template deployments")
+        logger.debug(f"Retrieved shared resources. Template deployments count: {len(current_app.template_deployments)}")
         
-        return current_app.template_deployments, save_deployment_history, inventory
+        return current_app.template_deployments, log_message, save_deployment_history, inventory
         
     except Exception as e:
-        logger.error(f"Failed to get app globals: {str(e)}")
-        logger.exception("Full exception details:")
+        logger.error(f"Failed to get shared resources: {str(e)}")
         
-        # Return fallback objects
-        template_deployments_fallback = {}
+        # Fallback resources
+        if not hasattr(current_app, 'template_deployments'):
+            current_app.template_deployments = {}
+        
+        def fallback_log(deployment_id, message):
+            logger.info(f"[{deployment_id}] {message}")
         
         def fallback_save():
-            logger.debug("Fallback save_deployment_history called")
             pass
         
-        inventory = {"vms": [], "databases": [], "db_connections": [], "helm_upgrades": [], "ansible_playbooks": []}
+        inventory = load_inventory_files()
         
-        return template_deployments_fallback, fallback_save, inventory
-
-def log_template_message(deployment_id, message):
-    """Log message specifically for template deployments"""
-    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-    formatted_message = f"[{timestamp}] {message}"
-    
-    logger.info(f"[{deployment_id}] {message}")
-    
-    # Store in template deployments
-    if deployment_id in current_app.template_deployments:
-        if 'logs' not in current_app.template_deployments[deployment_id]:
-            current_app.template_deployments[deployment_id]['logs'] = []
-        current_app.template_deployments[deployment_id]['logs'].append(formatted_message)
+        return current_app.template_deployments, fallback_log, fallback_save, inventory
 
 def load_inventory_files():
     """Load inventory files with fallbacks"""
@@ -149,8 +125,21 @@ def load_template(template_name):
         logger.error(f"Error loading template: {str(e)}")
         return None
 
+def log_template_message(deployment_id, message):
+    """Log message for template deployments"""
+    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+    formatted_message = f"[{timestamp}] {message}"
+    
+    logger.info(f"[{deployment_id}] {message}")
+    
+    # Store in template deployments
+    if deployment_id in current_app.template_deployments:
+        if 'logs' not in current_app.template_deployments[deployment_id]:
+            current_app.template_deployments[deployment_id]['logs'] = []
+        current_app.template_deployments[deployment_id]['logs'].append(formatted_message)
+
 def save_template_deployment_history():
-    """Save template deployment history to a separate file"""
+    """Save template deployment history"""
     try:
         if not hasattr(current_app, 'template_deployments'):
             return
@@ -193,8 +182,6 @@ def list_templates():
                     except Exception as e:
                         logger.warning(f"Failed to load template {file_name}: {str(e)}")
                         continue
-        else:
-            logger.warning(f"Template directory does not exist: {TEMPLATE_DIR}")
 
         logger.debug(f"Found {len(templates)} templates")
         return jsonify({"templates": templates})
@@ -235,15 +222,15 @@ def deploy_template():
             logger.error("Missing template name for template deployment")
             return jsonify({"error": "Missing template name"}), 400
         
-        # Get shared objects from main app
-        template_deployments, save_deployment_history, inventory = get_app_globals()
-        logger.debug("Successfully got app globals")
+        # Get shared resources
+        template_deployments, log_message, save_deployment_history, inventory = get_shared_resources()
+        logger.debug("Successfully got shared resources")
         
         # Generate a unique deployment ID
         deployment_id = str(uuid.uuid4())
         logger.info(f"Generated deployment ID: {deployment_id}")
         
-        # Store deployment information in the template deployments dictionary
+        # Store deployment information
         deployment_data = {
             "id": deployment_id,
             "template": template_name,
@@ -257,38 +244,25 @@ def deploy_template():
         
         # Store in template deployments
         current_app.template_deployments[deployment_id] = deployment_data
-        logger.info(f"Stored template deployment. Total: {len(current_app.template_deployments)}")
+        logger.info(f"Stored template deployment. Total template deployments: {len(current_app.template_deployments)}")
         
         # Log initial message
         log_template_message(deployment_id, f"Template deployment initiated: {template_name}")
         logger.info(f"Logged initial message for template deployment {deployment_id}")
         
         # Save template deployment history
-        try:
-            save_template_deployment_history()
-            logger.debug("Saved template deployment history")
-        except Exception as save_e:
-            logger.warning(f"Failed to save template deployment history: {str(save_e)}")
+        save_template_deployment_history()
         
         # Start deployment in a separate thread
         logger.info(f"Creating background thread for template deployment {deployment_id}")
-        try:
-            deployment_thread = threading.Thread(
-                target=process_template_deployment_wrapper, 
-                args=(deployment_id, template_name, ft_number, variables),
-                daemon=True,
-                name=f"template-deploy-{deployment_id[:8]}"
-            )
-            deployment_thread.start()
-            logger.info(f"Background thread '{deployment_thread.name}' started successfully")
-            
-        except Exception as thread_e:
-            logger.error(f"Failed to create/start thread: {str(thread_e)}")
-            if deployment_id in current_app.template_deployments:
-                current_app.template_deployments[deployment_id]["status"] = "failed"
-            log_template_message(deployment_id, f"ERROR: Failed to start deployment thread: {str(thread_e)}")
-            save_template_deployment_history()
-            return jsonify({"error": f"Failed to start deployment: {str(thread_e)}"}), 500
+        deployment_thread = threading.Thread(
+            target=process_template_deployment_wrapper, 
+            args=(deployment_id, template_name, ft_number, variables, inventory),
+            daemon=True,
+            name=f"template-deploy-{deployment_id[:8]}"
+        )
+        deployment_thread.start()
+        logger.info(f"Background thread '{deployment_thread.name}' started successfully")
         
         logger.info(f"Template deployment initiated with ID: {deployment_id}")
         return jsonify({"deploymentId": deployment_id})
@@ -296,24 +270,22 @@ def deploy_template():
     except Exception as e:
         logger.error(f"Error starting template deployment: {str(e)}")
         logger.exception("Full exception details:")
-        if deployment_id:
+        if deployment_id and hasattr(current_app, 'template_deployments'):
             try:
-                if deployment_id in current_app.template_deployments:
-                    current_app.template_deployments[deployment_id]["status"] = "failed"
+                current_app.template_deployments[deployment_id]["status"] = "failed"
                 log_template_message(deployment_id, f"ERROR: {str(e)}")
                 save_template_deployment_history()
             except:
                 pass
         return jsonify({"error": str(e)}), 500
 
-def process_template_deployment_wrapper(deployment_id, template_name, ft_number, variables):
+def process_template_deployment_wrapper(deployment_id, template_name, ft_number, variables, inventory):
     """Wrapper function to handle exceptions in the deployment thread"""
     try:
         logger.info(f"=== WRAPPER: Starting template deployment thread for {deployment_id} ===")
         
         with current_app.app_context():
-            template_deployments, save_deployment_history, inventory = get_app_globals()
-            process_template_deployment(deployment_id, template_name, ft_number, variables, template_deployments, save_deployment_history, inventory)
+            process_template_deployment(deployment_id, template_name, ft_number, variables, inventory)
     except Exception as e:
         logger.error(f"=== WRAPPER: Exception in template deployment thread {deployment_id}: {str(e)} ===")
         logger.exception("Full wrapper exception details:")
@@ -326,7 +298,7 @@ def process_template_deployment_wrapper(deployment_id, template_name, ft_number,
         except Exception as cleanup_e:
             logger.error(f"Failed to update deployment status after thread error: {str(cleanup_e)}")
 
-def process_template_deployment(deployment_id, template_name, ft_number, variables, template_deployments, save_deployment_history, inventory):
+def process_template_deployment(deployment_id, template_name, ft_number, variables, inventory):
     """Process template deployment in a separate thread"""
     try:
         logger.info(f"=== STARTING TEMPLATE DEPLOYMENT PROCESSING: {deployment_id} ===")
@@ -359,17 +331,17 @@ def process_template_deployment(deployment_id, template_name, ft_number, variabl
                 log_template_message(deployment_id, f"Executing step {step_order}: {step_description}")
                 logger.info(f"[{deployment_id}] Executing step {step_order}: {step_type}")
                 
-                # Execute different step types
+                # Execute different step types using main app functions
                 if step_type == "file_deployment":
-                    execute_file_deployment(deployment_id, step, inventory)
+                    execute_file_deployment_step(deployment_id, step, inventory)
                 elif step_type == "sql_deployment":
-                    execute_sql_deployment(deployment_id, step, inventory)
+                    execute_sql_deployment_step(deployment_id, step, inventory)
                 elif step_type == "service_restart":
-                    execute_service_restart(deployment_id, step, inventory)
+                    execute_service_restart_step(deployment_id, step, inventory)
                 elif step_type == "ansible_playbook":
-                    execute_ansible_playbook(deployment_id, step, inventory)
+                    execute_ansible_playbook_step(deployment_id, step, inventory)
                 elif step_type == "helm_upgrade":
-                    execute_helm_upgrade(deployment_id, step, inventory)
+                    execute_helm_upgrade_step(deployment_id, step, inventory)
                 else:
                     log_template_message(deployment_id, f"WARNING: Unknown step type: {step_type}")
                 
@@ -402,11 +374,11 @@ def process_template_deployment(deployment_id, template_name, ft_number, variabl
         except:
             logger.error("Failed to update deployment status after error")
 
-def execute_file_deployment(deployment_id, step, inventory):
-    """Execute file deployment step using Ansible"""
+def execute_file_deployment_step(deployment_id, step, inventory):
+    """Execute file deployment step by calling main app function"""
     try:
-        logger.info(f"[{deployment_id}] Starting file deployment step")
-        log_template_message(deployment_id, f"Starting file deployment step")
+        # Import the main app's file deployment function
+        from app import execute_ansible_file_deployment
         
         files = step.get("files", [])
         ft_number = step.get("ftNumber", "")
@@ -414,116 +386,32 @@ def execute_file_deployment(deployment_id, step, inventory):
         target_user = step.get("targetUser", "infadm")
         target_vms = step.get("targetVMs", ["batch1"])
         
-        log_template_message(deployment_id, f"Files: {files}, Target: {target_path}, User: {target_user}, VMs: {target_vms}")
+        log_template_message(deployment_id, f"File deployment: {files} to {target_path} on {target_vms}")
         
-        # Create ansible inventory
-        inventory_content = "[file_targets]\n"
-        for vm_name in target_vms:
-            vm_info = next((v for v in inventory.get("vms", []) if v.get("name") == vm_name), None)
-            if vm_info:
-                inventory_content += f"{vm_name} ansible_host={vm_info['ip']} ansible_user=infadm ansible_ssh_private_key_file=/app/ssh-keys/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'\n"
-            else:
-                log_template_message(deployment_id, f"WARNING: VM {vm_name} not found in inventory")
-                inventory_content += f"{vm_name} ansible_host=10.172.145.204 ansible_user=infadm ansible_ssh_private_key_file=/app/ssh-keys/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'\n"
+        # Use the main app's function
+        result = execute_ansible_file_deployment(
+            vms=target_vms,
+            ft=ft_number,
+            file=files[0] if files else "",
+            target_path=target_path,
+            target_user=target_user,
+            files=files
+        )
         
-        # Write inventory to temp file
-        inventory_file = f"/tmp/inventory_{deployment_id}"
-        with open(inventory_file, 'w') as f:
-            f.write(inventory_content)
-        
-        # Create ansible playbook for file deployment
-        playbook_content = f"""---
-- name: File deployment for {ft_number}
-  hosts: file_targets
-  gather_facts: false
-  tasks:
-    - name: Test connection
-      ansible.builtin.ping:
-      
-    - name: Create target directory
-      ansible.builtin.file:
-        path: {target_path}
-        state: directory
-        owner: {target_user}
-        mode: '0755'
-      become: yes
-      
-"""
-        
-        # Add tasks for each file
-        for file_name in files:
-            source_path = f"/app/fixfiles/{ft_number}/{file_name}"
-            playbook_content += f"""    - name: Create backup of {file_name}
-      ansible.builtin.copy:
-        src: {target_path}/{file_name}
-        dest: {target_path}/{file_name}.bak.{{{{ ansible_date_time.epoch }}}}
-        remote_src: yes
-      ignore_errors: yes
-      become: yes
-      
-    - name: Copy {file_name} to target
-      ansible.builtin.copy:
-        src: {source_path}
-        dest: {target_path}/{file_name}
-        owner: {target_user}
-        mode: '0644'
-      become: yes
-      
-"""
-        
-        playbook_file = f"/tmp/playbook_{deployment_id}.yml"
-        with open(playbook_file, 'w') as f:
-            f.write(playbook_content)
-        
-        log_template_message(deployment_id, f"Created Ansible playbook and inventory files")
-        
-        # Execute ansible playbook
-        cmd = ["ansible-playbook", "-i", inventory_file, playbook_file, "-v"]
-        log_template_message(deployment_id, f"Executing: {' '.join(cmd)}")
-        
-        env_vars = os.environ.copy()
-        env_vars["ANSIBLE_HOST_KEY_CHECKING"] = "False"
-        
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env_vars, timeout=300)
-        
-        # Log output
-        if result.stdout:
-            log_template_message(deployment_id, "=== ANSIBLE OUTPUT ===")
-            for line in result.stdout.splitlines():
-                if line.strip():
-                    log_template_message(deployment_id, line.strip())
-        
-        if result.stderr:
-            log_template_message(deployment_id, "=== ANSIBLE STDERR ===")
-            for line in result.stderr.splitlines():
-                if line.strip():
-                    log_template_message(deployment_id, line.strip())
-        
-        # Clean up temp files
-        try:
-            os.remove(inventory_file)
-            os.remove(playbook_file)
-        except:
-            pass
-        
-        if result.returncode == 0:
-            log_template_message(deployment_id, f"File deployment completed successfully")
+        if result.get('success'):
+            log_template_message(deployment_id, "File deployment completed successfully")
         else:
-            error_msg = f"File deployment failed with return code: {result.returncode}"
-            log_template_message(deployment_id, f"ERROR: {error_msg}")
-            raise Exception(error_msg)
-        
+            raise Exception(result.get('error', 'File deployment failed'))
+            
     except Exception as e:
-        error_msg = f"File deployment failed: {str(e)}"
-        log_template_message(deployment_id, f"ERROR: {error_msg}")
-        logger.error(f"[{deployment_id}] {error_msg}")
+        logger.error(f"File deployment step failed: {str(e)}")
         raise
 
-def execute_sql_deployment(deployment_id, step, inventory):
-    """Execute SQL deployment step"""
+def execute_sql_deployment_step(deployment_id, step, inventory):
+    """Execute SQL deployment step by calling main app function"""
     try:
-        logger.info(f"[{deployment_id}] Starting SQL deployment step")
-        log_template_message(deployment_id, f"Starting SQL deployment step")
+        # Import the main app's SQL deployment function
+        from app import execute_sql_deployment
         
         files = step.get("files", [])
         ft_number = step.get("ftNumber", "")
@@ -536,255 +424,100 @@ def execute_sql_deployment(deployment_id, step, inventory):
             decoded_password = base64.b64decode(db_password).decode('utf-8')
             db_password = decoded_password
         except:
-            pass  # Use password as-is if not base64
+            pass
         
-        log_template_message(deployment_id, f"SQL Files: {files}, DB Connection: {db_connection}, User: {db_user}")
+        log_template_message(deployment_id, f"SQL deployment: {files} on connection {db_connection}")
         
-        # Find database connection info
-        db_info = None
-        for conn in inventory.get("db_connections", []):
-            if conn.get("connection_name") == db_connection:
-                db_info = conn
-                break
+        # Use the main app's function
+        result = execute_sql_deployment(
+            ft=ft_number,
+            file=files[0] if files else "",
+            db_connection=db_connection,
+            db_user=db_user,
+            db_password=db_password
+        )
         
-        if not db_info:
-            log_template_message(deployment_id, f"WARNING: Database connection '{db_connection}' not found, using first available")
-            db_info = inventory.get("db_connections", [{}])[0] if inventory.get("db_connections") else {}
-        
-        hostname = db_info.get("hostname", "localhost")
-        port = db_info.get("port", "5432")
-        
-        log_template_message(deployment_id, f"Connecting to database: {hostname}:{port}")
-        
-        # Execute SQL files
-        for sql_file in files:
-            sql_path = f"/app/fixfiles/{ft_number}/{sql_file}"
+        if result.get('success'):
+            log_template_message(deployment_id, "SQL deployment completed successfully")
+        else:
+            raise Exception(result.get('error', 'SQL deployment failed'))
             
-            if not os.path.exists(sql_path):
-                log_template_message(deployment_id, f"WARNING: SQL file not found: {sql_path}")
-                continue
-            
-            log_template_message(deployment_id, f"Executing SQL file: {sql_file}")
-            
-            # Use psql to execute SQL
-            cmd = [
-                "psql",
-                f"postgresql://{db_user}:{db_password}@{hostname}:{port}/postgres",
-                "-f", sql_path,
-                "-v", "ON_ERROR_STOP=1"
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-            
-            if result.stdout:
-                log_template_message(deployment_id, f"SQL Output: {result.stdout}")
-            
-            if result.stderr:
-                log_template_message(deployment_id, f"SQL Stderr: {result.stderr}")
-            
-            if result.returncode == 0:
-                log_template_message(deployment_id, f"SQL file {sql_file} executed successfully")
-            else:
-                error_msg = f"SQL file {sql_file} execution failed with return code: {result.returncode}"
-                log_template_message(deployment_id, f"ERROR: {error_msg}")
-                raise Exception(error_msg)
-        
-        log_template_message(deployment_id, f"SQL deployment completed successfully")
-        
     except Exception as e:
-        error_msg = f"SQL deployment failed: {str(e)}"
-        log_template_message(deployment_id, f"ERROR: {error_msg}")
-        logger.error(f"[{deployment_id}] {error_msg}")
+        logger.error(f"SQL deployment step failed: {str(e)}")
         raise
 
-def execute_service_restart(deployment_id, step, inventory):
-    """Execute service operation step using Ansible"""
+def execute_service_restart_step(deployment_id, step, inventory):
+    """Execute service restart step by calling main app function"""
     try:
-        logger.info(f"[{deployment_id}] Starting service restart step")
-        log_template_message(deployment_id, f"Starting service restart step")
+        # Import the main app's systemctl function
+        from app import execute_ansible_systemctl
         
         service = step.get("service", "docker")
         operation = step.get("operation", "restart")
         target_vms = step.get("targetVMs", ["batch1"])
         
-        log_template_message(deployment_id, f"Service: {service}, Operation: {operation}, Target VMs: {target_vms}")
+        log_template_message(deployment_id, f"Service operation: {operation} {service} on {target_vms}")
         
-        # Create ansible inventory
-        inventory_content = "[service_targets]\n"
-        for vm_name in target_vms:
-            vm_info = next((v for v in inventory.get("vms", []) if v.get("name") == vm_name), None)
-            if vm_info:
-                inventory_content += f"{vm_name} ansible_host={vm_info['ip']} ansible_user=infadm ansible_ssh_private_key_file=/app/ssh-keys/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'\n"
-            else:
-                log_template_message(deployment_id, f"WARNING: VM {vm_name} not found in inventory")
-                inventory_content += f"{vm_name} ansible_host=10.172.145.204 ansible_user=infadm ansible_ssh_private_key_file=/app/ssh-keys/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'\n"
+        # Use the main app's function
+        result = execute_ansible_systemctl(
+            vms=target_vms,
+            service=service,
+            operation=operation
+        )
         
-        # Write inventory to temp file
-        inventory_file = f"/tmp/inventory_{deployment_id}"
-        with open(inventory_file, 'w') as f:
-            f.write(inventory_content)
-        
-        # Create ansible playbook
-        if operation == "status":
-            playbook_content = f"""---
-- name: Service {operation} operation for {service}
-  hosts: service_targets
-  gather_facts: false
-  tasks:
-    - name: Test connection
-      ansible.builtin.ping:
-      
-    - name: Check service status
-      ansible.builtin.systemd:
-        name: {service}
-      register: service_result
-      
-    - name: Show service status
-      ansible.builtin.debug:
-        msg: "Service {{{{ ansible_facts['hostname'] }}}}: {service} is {{{{ service_result.status.ActiveState }}}}"
-"""
+        if result.get('success'):
+            log_template_message(deployment_id, f"Service {operation} completed successfully")
         else:
-            playbook_content = f"""---
-- name: Service {operation} operation for {service}
-  hosts: service_targets
-  gather_facts: false
-  tasks:
-    - name: Test connection
-      ansible.builtin.ping:
-      
-    - name: Perform systemctl {operation} {service}
-      ansible.builtin.systemd:
-        name: {service}
-        state: {'started' if operation == 'start' else 'stopped' if operation == 'stop' else 'restarted'}
-      register: service_result
-      
-    - name: Show service status
-      ansible.builtin.debug:
-        msg: "Service {{{{ ansible_facts['hostname'] }}}}: {service} operation {operation} completed"
-"""
-        
-        playbook_file = f"/tmp/playbook_{deployment_id}.yml"
-        with open(playbook_file, 'w') as f:
-            f.write(playbook_content)
-        
-        log_template_message(deployment_id, f"Created Ansible playbook and inventory files")
-        
-        # Execute ansible playbook
-        cmd = ["ansible-playbook", "-i", inventory_file, playbook_file, "-v"]
-        log_template_message(deployment_id, f"Executing: {' '.join(cmd)}")
-        
-        env_vars = os.environ.copy()
-        env_vars["ANSIBLE_HOST_KEY_CHECKING"] = "False"
-        
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env_vars, timeout=120)
-        
-        # Log output
-        if result.stdout:
-            log_template_message(deployment_id, "=== ANSIBLE OUTPUT ===")
-            for line in result.stdout.splitlines():
-                if line.strip():
-                    log_template_message(deployment_id, line.strip())
-        
-        if result.stderr:
-            log_template_message(deployment_id, "=== ANSIBLE STDERR ===")
-            for line in result.stderr.splitlines():
-                if line.strip():
-                    log_template_message(deployment_id, line.strip())
-        
-        # Clean up temp files
-        try:
-            os.remove(inventory_file)
-            os.remove(playbook_file)
-        except:
-            pass
-        
-        if result.returncode == 0:
-            log_template_message(deployment_id, f"Service {operation} operation completed successfully")
-        else:
-            error_msg = f"Service {operation} operation failed with return code: {result.returncode}"
-            log_template_message(deployment_id, f"ERROR: {error_msg}")
-            raise Exception(error_msg)
-        
+            raise Exception(result.get('error', f'Service {operation} failed'))
+            
     except Exception as e:
-        error_msg = f"Service restart failed: {str(e)}"
-        log_template_message(deployment_id, f"ERROR: {error_msg}")
-        logger.error(f"[{deployment_id}] {error_msg}")
+        logger.error(f"Service restart step failed: {str(e)}")
         raise
 
-def execute_ansible_playbook(deployment_id, step, inventory):
+def execute_ansible_playbook_step(deployment_id, step, inventory):
     """Execute Ansible playbook step"""
     try:
-        logger.info(f"[{deployment_id}] Starting Ansible playbook step")
-        log_template_message(deployment_id, f"Starting Ansible playbook step")
-        
         playbook_name = step.get("playbook", "")
         
-        log_template_message(deployment_id, f"Executing playbook: {playbook_name}")
+        log_template_message(deployment_id, f"Executing Ansible playbook: {playbook_name}")
         
         # Find playbook path from inventory
-        playbook_info = None
+        playbook_path = f"/etc/ansible/playbooks/{playbook_name}"
         for pb in inventory.get("ansible_playbooks", []):
             if pb.get("name") == playbook_name:
-                playbook_info = pb
+                playbook_path = os.path.join(pb.get("path", "/etc/ansible/playbooks/"), playbook_name)
                 break
         
-        if not playbook_info:
-            log_template_message(deployment_id, f"WARNING: Playbook '{playbook_name}' not found in inventory")
-            playbook_path = f"/etc/ansible/playbooks/{playbook_name}"
-        else:
-            playbook_path = os.path.join(playbook_info.get("path", "/etc/ansible/playbooks/"), playbook_name)
-        
-        log_template_message(deployment_id, f"Playbook path: {playbook_path}")
-        
         if not os.path.exists(playbook_path):
-            error_msg = f"Playbook file not found: {playbook_path}"
-            log_template_message(deployment_id, f"ERROR: {error_msg}")
-            raise Exception(error_msg)
+            raise Exception(f"Playbook file not found: {playbook_path}")
         
         # Execute ansible playbook
         cmd = ["ansible-playbook", playbook_path, "-v"]
-        log_template_message(deployment_id, f"Executing: {' '.join(cmd)}")
-        
         env_vars = os.environ.copy()
         env_vars["ANSIBLE_HOST_KEY_CHECKING"] = "False"
         
         result = subprocess.run(cmd, capture_output=True, text=True, env=env_vars, timeout=600)
         
-        # Log output
         if result.stdout:
-            log_template_message(deployment_id, "=== ANSIBLE PLAYBOOK OUTPUT ===")
             for line in result.stdout.splitlines():
                 if line.strip():
-                    log_template_message(deployment_id, line.strip())
-        
-        if result.stderr:
-            log_template_message(deployment_id, "=== ANSIBLE PLAYBOOK STDERR ===")
-            for line in result.stderr.splitlines():
-                if line.strip():
-                    log_template_message(deployment_id, line.strip())
+                    log_template_message(deployment_id, f"ANSIBLE: {line.strip()}")
         
         if result.returncode == 0:
-            log_template_message(deployment_id, f"Ansible playbook executed successfully")
+            log_template_message(deployment_id, "Ansible playbook executed successfully")
         else:
-            error_msg = f"Ansible playbook execution failed with return code: {result.returncode}"
-            log_template_message(deployment_id, f"ERROR: {error_msg}")
-            raise Exception(error_msg)
-        
+            raise Exception(f"Ansible playbook execution failed with return code: {result.returncode}")
+            
     except Exception as e:
-        error_msg = f"Ansible playbook execution failed: {str(e)}"
-        log_template_message(deployment_id, f"ERROR: {error_msg}")
-        logger.error(f"[{deployment_id}] {error_msg}")
+        logger.error(f"Ansible playbook step failed: {str(e)}")
         raise
 
-def execute_helm_upgrade(deployment_id, step, inventory):
+def execute_helm_upgrade_step(deployment_id, step, inventory):
     """Execute Helm upgrade step"""
     try:
-        logger.info(f"[{deployment_id}] Starting Helm upgrade step")
-        log_template_message(deployment_id, f"Starting Helm upgrade step")
-        
         helm_deployment_type = step.get("helmDeploymentType", "")
         
-        log_template_message(deployment_id, f"Helm deployment type: {helm_deployment_type}")
+        log_template_message(deployment_id, f"Executing Helm upgrade: {helm_deployment_type}")
         
         # Find helm command from inventory
         helm_command = None
@@ -794,89 +527,26 @@ def execute_helm_upgrade(deployment_id, step, inventory):
                 break
         
         if not helm_command:
-            error_msg = f"Helm upgrade command not found for pod: {helm_deployment_type}"
-            log_template_message(deployment_id, f"ERROR: {error_msg}")
-            raise Exception(error_msg)
+            raise Exception(f"Helm upgrade command not found for pod: {helm_deployment_type}")
         
-        log_template_message(deployment_id, f"Executing helm command: {helm_command}")
+        # Execute helm command on batch1
+        cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-i", "/app/ssh-keys/id_rsa", 
+               "infadm@10.172.145.204", helm_command]
         
-        # Create ansible inventory for batch1 (assuming helm runs on batch1)
-        inventory_content = "[helm_targets]\n"
-        vm_info = next((v for v in inventory.get("vms", []) if v.get("name") == "batch1"), None)
-        if vm_info:
-            inventory_content += f"batch1 ansible_host={vm_info['ip']} ansible_user=infadm ansible_ssh_private_key_file=/app/ssh-keys/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'\n"
-        else:
-            inventory_content += f"batch1 ansible_host=10.172.145.204 ansible_user=infadm ansible_ssh_private_key_file=/app/ssh-keys/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'\n"
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         
-        # Write inventory to temp file
-        inventory_file = f"/tmp/inventory_{deployment_id}"
-        with open(inventory_file, 'w') as f:
-            f.write(inventory_content)
-        
-        # Create ansible playbook for helm upgrade
-        playbook_content = f"""---
-- name: Helm upgrade for {helm_deployment_type}
-  hosts: helm_targets
-  gather_facts: false
-  tasks:
-    - name: Test connection
-      ansible.builtin.ping:
-      
-    - name: Execute helm upgrade command
-      ansible.builtin.shell: {helm_command}
-      register: helm_result
-      
-    - name: Show helm output
-      ansible.builtin.debug:
-        msg: "{{{{ helm_result.stdout }}}}"
-"""
-        
-        playbook_file = f"/tmp/playbook_{deployment_id}.yml"
-        with open(playbook_file, 'w') as f:
-            f.write(playbook_content)
-        
-        log_template_message(deployment_id, f"Created Ansible playbook for helm upgrade")
-        
-        # Execute ansible playbook
-        cmd = ["ansible-playbook", "-i", inventory_file, playbook_file, "-v"]
-        log_template_message(deployment_id, f"Executing: {' '.join(cmd)}")
-        
-        env_vars = os.environ.copy()
-        env_vars["ANSIBLE_HOST_KEY_CHECKING"] = "False"
-        
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env_vars, timeout=600)
-        
-        # Log output
         if result.stdout:
-            log_template_message(deployment_id, "=== HELM UPGRADE OUTPUT ===")
             for line in result.stdout.splitlines():
                 if line.strip():
-                    log_template_message(deployment_id, line.strip())
-        
-        if result.stderr:
-            log_template_message(deployment_id, "=== HELM UPGRADE STDERR ===")
-            for line in result.stderr.splitlines():
-                if line.strip():
-                    log_template_message(deployment_id, line.strip())
-        
-        # Clean up temp files
-        try:
-            os.remove(inventory_file)
-            os.remove(playbook_file)
-        except:
-            pass
+                    log_template_message(deployment_id, f"HELM: {line.strip()}")
         
         if result.returncode == 0:
-            log_template_message(deployment_id, f"Helm upgrade completed successfully")
+            log_template_message(deployment_id, "Helm upgrade completed successfully")
         else:
-            error_msg = f"Helm upgrade failed with return code: {result.returncode}"
-            log_template_message(deployment_id, f"ERROR: {error_msg}")
-            raise Exception(error_msg)
-        
+            raise Exception(f"Helm upgrade failed with return code: {result.returncode}")
+            
     except Exception as e:
-        error_msg = f"Helm upgrade failed: {str(e)}"
-        log_template_message(deployment_id, f"ERROR: {error_msg}")
-        logger.error(f"[{deployment_id}] {error_msg}")
+        logger.error(f"Helm upgrade step failed: {str(e)}")
         raise
 
 @deploy_template_bp.route('/api/template-deploy/<deployment_id>/logs', methods=['GET'])
@@ -885,12 +555,17 @@ def get_template_deployment_logs(deployment_id):
     try:
         logger.debug(f"Looking for template deployment: {deployment_id}")
         
+        if not hasattr(current_app, 'template_deployments'):
+            current_app.template_deployments = {}
+        
         if deployment_id not in current_app.template_deployments:
             logger.warning(f"Template deployment {deployment_id} not found")
             return jsonify({"error": "Template deployment not found"}), 404
         
         deployment = current_app.template_deployments[deployment_id]
         logs = deployment.get('logs', [])
+        
+        logger.debug(f"Found template deployment {deployment_id} with {len(logs)} log entries")
         
         return jsonify({
             "deploymentId": deployment_id,
@@ -925,6 +600,7 @@ def get_template_deployment_history():
             })
         
         deployment_list.sort(key=lambda x: x["timestamp"], reverse=True)
+        logger.debug(f"Returning {len(deployment_list)} template deployments")
         return jsonify(deployment_list)
         
     except Exception as e:
