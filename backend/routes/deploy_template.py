@@ -251,10 +251,21 @@ def save_template_deployments():
         logger.debug(f"JSON content to save: {json_content}")
         
         # Write to file
+        # with open(TEMPLATE_HISTORY_FILE, 'w') as f:
+        #     f.write(json_content)
         with open(TEMPLATE_HISTORY_FILE, 'w') as f:
             f.write(json_content)
-        
+            f.flush()             # ✅ force flush buffer to file
+            os.fsync(f.fileno())  # ✅ force sync file to disk (especially for Docker volumes)
+                
         logger.debug("File write completed")
+
+        with open(TEMPLATE_HISTORY_FILE, 'r') as f:
+            verify_content = f.read().strip()
+            if not verify_content:
+                logger.critical("File was written but is empty. Aborting.")
+            else:
+                logger.debug("File written and verified successfully.")
         
         # Verify the save immediately
         if os.path.exists(TEMPLATE_HISTORY_FILE):
@@ -1289,7 +1300,7 @@ def get_template_deployment_history():
         return jsonify({"error": str(e)}), 500
 
 
-        
+
 ensure_directories()
 test_file_permissions()
 load_template_deployments()
