@@ -24,7 +24,122 @@ from routes.deploy_template import deploy_template_bp
 # Register the blueprint
 #app.register_blueprint(db_blueprint, url_prefix='/api')
 
+
+app = Flask(__name__, static_folder='../frontend/dist')
+
+app.deployments = deployments
+app.save_deployment_history = save_deployment_history
+app.log_message = log_message
+
+# Register the blueprint
+app.register_blueprint(db_routes)
+app.register_blueprint(auth_bp)
+app.register_blueprint(template_bp)
+app.register_blueprint(deploy_template_bp)
+#app.register_blueprint(db_routes)
+
+
+
+# Directory where fix files are stored
+FIX_FILES_DIR = os.environ.get('FIX_FILES_DIR', '/app/fixfiles')
+
+# Directory for deployment logs
+DEPLOYMENT_LOGS_DIR = os.environ.get('DEPLOYMENT_LOGS_DIR', '/app/logs')
+APP_LOG_FILE = os.environ.get('APP_LOG_FILE', os.path.join(DEPLOYMENT_LOGS_DIR, 'application.log'))
+DEPLOYMENT_HISTORY_FILE = os.path.join(DEPLOYMENT_LOGS_DIR, 'deployment_history.json')
+
+
+# Configure application logging
+logger = logging.getLogger('fix_deployment_orchestrator')
+logger.setLevel(logging.DEBUG)
+# Create logs directory if it doesn't exist
+os.makedirs(DEPLOYMENT_LOGS_DIR, exist_ok=True)
+os.makedirs('/tmp/ansible-ssh', exist_ok=True)  # Ensure ansible control path directory exists
+# os.chmod('/tmp/ansible-ssh', 0o777)  # Set proper permissions for ansible control path
+
+try:
+    os.chmod('/tmp/ansible-ssh', 0o777)  # Set proper permissions for ansible control path
+except PermissionError:
+    logger.info("Could not set permissions on /tmp/ansible-ssh - continuing with existing permissions")
+
+
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_format)
+
+# File handler (with rotation)
+os.makedirs(os.path.dirname(APP_LOG_FILE), exist_ok=True)  # Ensure log directory exists
+file_handler = RotatingFileHandler(APP_LOG_FILE, maxBytes=10485760, backupCount=10) # 10MB per file, keep 10 files
+file_handler.setLevel(logging.DEBUG)
+file_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(file_format)
+
+# Add handlers
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
+
+logger.info("Starting Fix Deployment Orchestrator with enhanced logging")
+logger.debug(f"Application environment: FLASK_ENV={os.environ.get('FLASK_ENV', 'production')}")
+logger.debug(f"Fix files directory: {FIX_FILES_DIR}")
+logger.debug(f"Deployment logs directory: {DEPLOYMENT_LOGS_DIR}")
+logger.debug(f"Application log file: {APP_LOG_FILE}")
+
+# Dictionary to store deployment information
 deployments = {}
+
+# Store deployments in app config so it can be accessed via current_app
+app.config['deployments'] = deployments
+# Try to load previous deployments if they exist
+try:
+    if os.path.exists(DEPLOYMENT_HISTORY_FILE):
+        with open(DEPLOYMENT_HISTORY_FILE, 'r') as f:
+            try:
+                deployments = json.load(f)
+                logger.info(f"Loaded {len(deployments)} previous deployments from history file")
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing deployment history file: {str(e)}")
+                # Create a backup of the corrupted file
+                backup_file = os.path.join(DEPLOYMENT_LOGS_DIR, f'deployment_history_corrupt_{int(time.time())}.json')
+                os.rename(DEPLOYMENT_HISTORY_FILE, backup_file)
+                logger.info(f"Renamed corrupted history file to {backup_file}")
+                deployments = {}
+    else:
+        # Look for backup history files in the logs directory
+        backup_files = sorted(glob.glob(os.path.join(DEPLOYMENT_LOGS_DIR, 'deployment_history_*.json')), reverse=True)
+        if backup_files:
+            logger.info(f"Found {len(backup_files)} backup deployment history files, loading most recent")
+            for backup_file in backup_files:
+                try:
+                    with open(backup_file, 'r') as f:
+                        deployments = json.load(f)
+                    logger.info(f"Loaded {len(deployments)} previous deployments from backup file {backup_file}")
+                    break
+                except (json.JSONDecodeError, Exception) as e:
+                    logger.error(f"Error loading from backup file {backup_file}: {str(e)}")
+                    continue
+        else:
+            logger.info("No deployment history file found, creating new one")
+            # Create an empty history file
+            with open(DEPLOYMENT_HISTORY_FILE, 'w') as f:
+                json.dump({}, f)
+except Exception as e:
+    logger.error(f"Failed to load deployment history: {str(e)}")
+
+# Load inventory from file or create a default one
+INVENTORY_FILE = os.environ.get('INVENTORY_FILE', '/app/inventory/inventory.json')
+os.makedirs(os.path.dirname(INVENTORY_FILE), exist_ok=True)
+
+try:
+    with open(INVENTORY_FILE, 'r') as f:
+        inventory = json.load(f)
+    logger.info(f"Loaded inventory with {len(inventory.get('vms', []))} VMs")
+except (FileNotFoundError, json.JSONDecodeError) as e:
+    logger.error(f"Error loading inventory: {str(e)} - Please create/fix inventory.json manually")
+    inventory = {"vms": [], "users": [], "systemd_services": []}
+    # Don't save the empty inventory - let user create it manually
 
 def save_deployment_history():
     try:
@@ -97,123 +212,6 @@ def log_message(deployment_id, message):
         
         # Also log to application log
         logger.debug(f"[{deployment_id}] {message}")
-
-app = Flask(__name__, static_folder='../frontend/dist')
-
-app.deployments = deployments
-app.save_deployment_history = save_deployment_history
-app.log_message = log_message
-
-# Register the blueprint
-app.register_blueprint(db_routes)
-app.register_blueprint(auth_bp)
-app.register_blueprint(template_bp)
-app.register_blueprint(deploy_template_bp)
-#app.register_blueprint(db_routes)
-
-
-
-# Directory where fix files are stored
-FIX_FILES_DIR = os.environ.get('FIX_FILES_DIR', '/app/fixfiles')
-
-# Directory for deployment logs
-DEPLOYMENT_LOGS_DIR = os.environ.get('DEPLOYMENT_LOGS_DIR', '/app/logs')
-APP_LOG_FILE = os.environ.get('APP_LOG_FILE', os.path.join(DEPLOYMENT_LOGS_DIR, 'application.log'))
-DEPLOYMENT_HISTORY_FILE = os.path.join(DEPLOYMENT_LOGS_DIR, 'deployment_history.json')
-
-
-# Configure application logging
-logger = logging.getLogger('fix_deployment_orchestrator')
-logger.setLevel(logging.DEBUG)
-# Create logs directory if it doesn't exist
-os.makedirs(DEPLOYMENT_LOGS_DIR, exist_ok=True)
-os.makedirs('/tmp/ansible-ssh', exist_ok=True)  # Ensure ansible control path directory exists
-# os.chmod('/tmp/ansible-ssh', 0o777)  # Set proper permissions for ansible control path
-
-try:
-    os.chmod('/tmp/ansible-ssh', 0o777)  # Set proper permissions for ansible control path
-except PermissionError:
-    logger.info("Could not set permissions on /tmp/ansible-ssh - continuing with existing permissions")
-
-
-
-# Console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-console_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-console_handler.setFormatter(console_format)
-
-# File handler (with rotation)
-os.makedirs(os.path.dirname(APP_LOG_FILE), exist_ok=True)  # Ensure log directory exists
-file_handler = RotatingFileHandler(APP_LOG_FILE, maxBytes=10485760, backupCount=10) # 10MB per file, keep 10 files
-file_handler.setLevel(logging.DEBUG)
-file_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(file_format)
-
-# Add handlers
-logger.addHandler(console_handler)
-logger.addHandler(file_handler)
-
-logger.info("Starting Fix Deployment Orchestrator with enhanced logging")
-logger.debug(f"Application environment: FLASK_ENV={os.environ.get('FLASK_ENV', 'production')}")
-logger.debug(f"Fix files directory: {FIX_FILES_DIR}")
-logger.debug(f"Deployment logs directory: {DEPLOYMENT_LOGS_DIR}")
-logger.debug(f"Application log file: {APP_LOG_FILE}")
-
-# Dictionary to store deployment information
-# deployments = {}
-
-# Store deployments in app config so it can be accessed via current_app
-app.config['deployments'] = deployments
-# Try to load previous deployments if they exist
-try:
-    if os.path.exists(DEPLOYMENT_HISTORY_FILE):
-        with open(DEPLOYMENT_HISTORY_FILE, 'r') as f:
-            try:
-                deployments = json.load(f)
-                logger.info(f"Loaded {len(deployments)} previous deployments from history file")
-            except json.JSONDecodeError as e:
-                logger.error(f"Error parsing deployment history file: {str(e)}")
-                # Create a backup of the corrupted file
-                backup_file = os.path.join(DEPLOYMENT_LOGS_DIR, f'deployment_history_corrupt_{int(time.time())}.json')
-                os.rename(DEPLOYMENT_HISTORY_FILE, backup_file)
-                logger.info(f"Renamed corrupted history file to {backup_file}")
-                deployments = {}
-    else:
-        # Look for backup history files in the logs directory
-        backup_files = sorted(glob.glob(os.path.join(DEPLOYMENT_LOGS_DIR, 'deployment_history_*.json')), reverse=True)
-        if backup_files:
-            logger.info(f"Found {len(backup_files)} backup deployment history files, loading most recent")
-            for backup_file in backup_files:
-                try:
-                    with open(backup_file, 'r') as f:
-                        deployments = json.load(f)
-                    logger.info(f"Loaded {len(deployments)} previous deployments from backup file {backup_file}")
-                    break
-                except (json.JSONDecodeError, Exception) as e:
-                    logger.error(f"Error loading from backup file {backup_file}: {str(e)}")
-                    continue
-        else:
-            logger.info("No deployment history file found, creating new one")
-            # Create an empty history file
-            with open(DEPLOYMENT_HISTORY_FILE, 'w') as f:
-                json.dump({}, f)
-except Exception as e:
-    logger.error(f"Failed to load deployment history: {str(e)}")
-
-# Load inventory from file or create a default one
-INVENTORY_FILE = os.environ.get('INVENTORY_FILE', '/app/inventory/inventory.json')
-os.makedirs(os.path.dirname(INVENTORY_FILE), exist_ok=True)
-
-try:
-    with open(INVENTORY_FILE, 'r') as f:
-        inventory = json.load(f)
-    logger.info(f"Loaded inventory with {len(inventory.get('vms', []))} VMs")
-except (FileNotFoundError, json.JSONDecodeError) as e:
-    logger.error(f"Error loading inventory: {str(e)} - Please create/fix inventory.json manually")
-    inventory = {"vms": [], "users": [], "systemd_services": []}
-    # Don't save the empty inventory - let user create it manually
-
 
 # Function to save deployment history with backup
 
