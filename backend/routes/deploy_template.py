@@ -23,39 +23,48 @@ INVENTORY_FILE = "/app/inventory/inventory.json"
 DB_INVENTORY_FILE = "/app/inventory/db_inventory.json"
 FIX_FILES_DIR = "/app/fixfiles"
 
-def get_shared_resources():
-    """Get shared resources from the main app"""
+# Global template deployments storage (separate from main deployments)
+TEMPLATE_DEPLOYMENTS_STORAGE = {}
+TEMPLATE_HISTORY_FILE = os.path.join(DEPLOYMENT_LOGS_DIR, 'template_deployments.json')
+
+def load_template_deployments():
+    """Load template deployments from file"""
+    global TEMPLATE_DEPLOYMENTS_STORAGE
     try:
-        # Ensure template_deployments exists in current_app
-        if not hasattr(current_app, 'template_deployments'):
-            current_app.template_deployments = {}
-        
-        # Get the main app's deployment functions
-        from app import log_message, save_deployment_history
-        
-        # Load inventory files
-        inventory = load_inventory_files()
-        
-        logger.debug(f"Retrieved shared resources. Template deployments count: {len(current_app.template_deployments)}")
-        
-        return current_app.template_deployments, log_message, save_deployment_history, inventory
-        
+        if os.path.exists(TEMPLATE_HISTORY_FILE):
+            with open(TEMPLATE_HISTORY_FILE, 'r') as f:
+                TEMPLATE_DEPLOYMENTS_STORAGE = json.load(f)
+            logger.debug(f"Loaded {len(TEMPLATE_DEPLOYMENTS_STORAGE)} template deployments from file")
+        else:
+            TEMPLATE_DEPLOYMENTS_STORAGE = {}
+            logger.debug("No template deployment history file found, starting fresh")
     except Exception as e:
-        logger.error(f"Failed to get shared resources: {str(e)}")
-        
-        # Fallback resources
-        if not hasattr(current_app, 'template_deployments'):
-            current_app.template_deployments = {}
-        
-        def fallback_log(deployment_id, message):
-            logger.info(f"[{deployment_id}] {message}")
-        
-        def fallback_save():
-            pass
-        
-        inventory = load_inventory_files()
-        
-        return current_app.template_deployments, fallback_log, fallback_save, inventory
+        logger.error(f"Error loading template deployments: {str(e)}")
+        TEMPLATE_DEPLOYMENTS_STORAGE = {}
+
+def save_template_deployments():
+    """Save template deployments to file"""
+    try:
+        os.makedirs(DEPLOYMENT_LOGS_DIR, exist_ok=True)
+        with open(TEMPLATE_HISTORY_FILE, 'w') as f:
+            json.dump(TEMPLATE_DEPLOYMENTS_STORAGE, f, indent=2, default=str)
+        logger.debug(f"Saved {len(TEMPLATE_DEPLOYMENTS_STORAGE)} template deployments to file")
+    except Exception as e:
+        logger.error(f"Error saving template deployments: {str(e)}")
+
+def log_template_message(deployment_id, message):
+    """Log message for template deployments"""
+    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+    formatted_message = f"[{timestamp}] {message}"
+    
+    logger.info(f"[{deployment_id}] {message}")
+    
+    # Store in global template deployments
+    if deployment_id in TEMPLATE_DEPLOYMENTS_STORAGE:
+        if 'logs' not in TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]:
+            TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]['logs'] = []
+        TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]['logs'].append(formatted_message)
+        save_template_deployments()
 
 def load_inventory_files():
     """Load inventory files with fallbacks"""
@@ -125,34 +134,8 @@ def load_template(template_name):
         logger.error(f"Error loading template: {str(e)}")
         return None
 
-def log_template_message(deployment_id, message):
-    """Log message for template deployments"""
-    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-    formatted_message = f"[{timestamp}] {message}"
-    
-    logger.info(f"[{deployment_id}] {message}")
-    
-    # Store in template deployments
-    if deployment_id in current_app.template_deployments:
-        if 'logs' not in current_app.template_deployments[deployment_id]:
-            current_app.template_deployments[deployment_id]['logs'] = []
-        current_app.template_deployments[deployment_id]['logs'].append(formatted_message)
-
-def save_template_deployment_history():
-    """Save template deployment history"""
-    try:
-        if not hasattr(current_app, 'template_deployments'):
-            return
-            
-        os.makedirs(DEPLOYMENT_LOGS_DIR, exist_ok=True)
-        history_file = os.path.join(DEPLOYMENT_LOGS_DIR, 'template_deployment_history.json')
-        
-        with open(history_file, 'w') as f:
-            json.dump(current_app.template_deployments, f, indent=2, default=str)
-        
-        logger.debug(f"Saved template deployment history to {history_file}")
-    except Exception as e:
-        logger.error(f"Error saving template deployment history: {str(e)}")
+# Load template deployments on startup
+load_template_deployments()
 
 @deploy_template_bp.route('/api/templates', methods=['GET'])
 def list_templates():
@@ -222,15 +205,11 @@ def deploy_template():
             logger.error("Missing template name for template deployment")
             return jsonify({"error": "Missing template name"}), 400
         
-        # Get shared resources
-        template_deployments, log_message, save_deployment_history, inventory = get_shared_resources()
-        logger.debug("Successfully got shared resources")
-        
         # Generate a unique deployment ID
         deployment_id = str(uuid.uuid4())
         logger.info(f"Generated deployment ID: {deployment_id}")
         
-        # Store deployment information
+        # Store deployment information in global storage
         deployment_data = {
             "id": deployment_id,
             "template": template_name,
@@ -242,22 +221,19 @@ def deploy_template():
             "logged_in_user": "infadm"
         }
         
-        # Store in template deployments
-        current_app.template_deployments[deployment_id] = deployment_data
-        logger.info(f"Stored template deployment. Total template deployments: {len(current_app.template_deployments)}")
+        # Store in global template deployments
+        TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id] = deployment_data
+        logger.info(f"Stored template deployment. Total template deployments: {len(TEMPLATE_DEPLOYMENTS_STORAGE)}")
         
         # Log initial message
         log_template_message(deployment_id, f"Template deployment initiated: {template_name}")
         logger.info(f"Logged initial message for template deployment {deployment_id}")
         
-        # Save template deployment history
-        save_template_deployment_history()
-        
         # Start deployment in a separate thread
         logger.info(f"Creating background thread for template deployment {deployment_id}")
         deployment_thread = threading.Thread(
             target=process_template_deployment_wrapper, 
-            args=(deployment_id, template_name, ft_number, variables, inventory),
+            args=(deployment_id, template_name, ft_number, variables),
             daemon=True,
             name=f"template-deploy-{deployment_id[:8]}"
         )
@@ -270,40 +246,36 @@ def deploy_template():
     except Exception as e:
         logger.error(f"Error starting template deployment: {str(e)}")
         logger.exception("Full exception details:")
-        if deployment_id and hasattr(current_app, 'template_deployments'):
+        if deployment_id and deployment_id in TEMPLATE_DEPLOYMENTS_STORAGE:
             try:
-                current_app.template_deployments[deployment_id]["status"] = "failed"
+                TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]["status"] = "failed"
                 log_template_message(deployment_id, f"ERROR: {str(e)}")
-                save_template_deployment_history()
             except:
                 pass
         return jsonify({"error": str(e)}), 500
 
-def process_template_deployment_wrapper(deployment_id, template_name, ft_number, variables, inventory):
+def process_template_deployment_wrapper(deployment_id, template_name, ft_number, variables):
     """Wrapper function to handle exceptions in the deployment thread"""
     try:
         logger.info(f"=== WRAPPER: Starting template deployment thread for {deployment_id} ===")
-        
-        with current_app.app_context():
-            process_template_deployment(deployment_id, template_name, ft_number, variables, inventory)
+        process_template_deployment(deployment_id, template_name, ft_number, variables)
     except Exception as e:
         logger.error(f"=== WRAPPER: Exception in template deployment thread {deployment_id}: {str(e)} ===")
         logger.exception("Full wrapper exception details:")
         try:
-            with current_app.app_context():
-                log_template_message(deployment_id, f"ERROR: Deployment thread failed: {str(e)}")
-                if deployment_id in current_app.template_deployments:
-                    current_app.template_deployments[deployment_id]["status"] = "failed"
-                save_template_deployment_history()
+            log_template_message(deployment_id, f"ERROR: Deployment thread failed: {str(e)}")
+            if deployment_id in TEMPLATE_DEPLOYMENTS_STORAGE:
+                TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]["status"] = "failed"
+                save_template_deployments()
         except Exception as cleanup_e:
             logger.error(f"Failed to update deployment status after thread error: {str(cleanup_e)}")
 
-def process_template_deployment(deployment_id, template_name, ft_number, variables, inventory):
+def process_template_deployment(deployment_id, template_name, ft_number, variables):
     """Process template deployment in a separate thread"""
     try:
         logger.info(f"=== STARTING TEMPLATE DEPLOYMENT PROCESSING: {deployment_id} ===")
         
-        if deployment_id not in current_app.template_deployments:
+        if deployment_id not in TEMPLATE_DEPLOYMENTS_STORAGE:
             logger.error(f"Template deployment ID {deployment_id} not found")
             return
             
@@ -316,6 +288,9 @@ def process_template_deployment(deployment_id, template_name, ft_number, variabl
             raise Exception(f"Failed to load template: {template_name}")
         
         log_template_message(deployment_id, f"Loaded template: {template_name}")
+        
+        # Load inventory
+        inventory = load_inventory_files()
         
         # Process deployment steps
         steps = template.get("steps", [])
@@ -331,7 +306,7 @@ def process_template_deployment(deployment_id, template_name, ft_number, variabl
                 log_template_message(deployment_id, f"Executing step {step_order}: {step_description}")
                 logger.info(f"[{deployment_id}] Executing step {step_order}: {step_type}")
                 
-                # Execute different step types using main app functions
+                # Execute different step types
                 if step_type == "file_deployment":
                     execute_file_deployment_step(deployment_id, step, inventory)
                 elif step_type == "sql_deployment":
@@ -352,15 +327,15 @@ def process_template_deployment(deployment_id, template_name, ft_number, variabl
                 error_msg = f"Failed to execute step {step_order}: {str(e)}"
                 log_template_message(deployment_id, f"ERROR: {error_msg}")
                 logger.error(f"[{deployment_id}] {error_msg}")
-                current_app.template_deployments[deployment_id]["status"] = "failed"
-                save_template_deployment_history()
+                TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]["status"] = "failed"
+                save_template_deployments()
                 return
         
         # If we get here, all steps completed successfully
         log_template_message(deployment_id, "SUCCESS: Template deployment completed successfully")
-        current_app.template_deployments[deployment_id]["status"] = "success"
+        TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]["status"] = "success"
         logger.info(f"Template deployment {deployment_id} completed successfully")
-        save_template_deployment_history()
+        save_template_deployments()
         
     except Exception as e:
         error_msg = f"Unexpected error during template deployment: {str(e)}"
@@ -369,17 +344,14 @@ def process_template_deployment(deployment_id, template_name, ft_number, variabl
         
         try:
             log_template_message(deployment_id, f"ERROR: {error_msg}")
-            current_app.template_deployments[deployment_id]["status"] = "failed"
-            save_template_deployment_history()
+            TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]["status"] = "failed"
+            save_template_deployments()
         except:
             logger.error("Failed to update deployment status after error")
 
 def execute_file_deployment_step(deployment_id, step, inventory):
-    """Execute file deployment step by calling main app function"""
+    """Execute file deployment step"""
     try:
-        # Import the main app's file deployment function
-        from app import execute_ansible_file_deployment
-        
         files = step.get("files", [])
         ft_number = step.get("ftNumber", "")
         target_path = step.get("targetPath", "/tmp")
@@ -388,31 +360,40 @@ def execute_file_deployment_step(deployment_id, step, inventory):
         
         log_template_message(deployment_id, f"File deployment: {files} to {target_path} on {target_vms}")
         
-        # Use the main app's function
-        result = execute_ansible_file_deployment(
-            vms=target_vms,
-            ft=ft_number,
-            file=files[0] if files else "",
-            target_path=target_path,
-            target_user=target_user,
-            files=files
-        )
-        
-        if result.get('success'):
-            log_template_message(deployment_id, "File deployment completed successfully")
-        else:
-            raise Exception(result.get('error', 'File deployment failed'))
+        # Execute file deployment using Ansible
+        for vm in target_vms:
+            vm_ip = "10.172.145.204"  # Default IP for batch1
+            for vm_info in inventory.get("vms", []):
+                if vm_info.get("name") == vm:
+                    vm_ip = vm_info.get("ip", vm_ip)
+                    break
             
+            for file_name in files:
+                source_file = os.path.join(FIX_FILES_DIR, ft_number, file_name)
+                
+                if not os.path.exists(source_file):
+                    raise Exception(f"Source file not found: {source_file}")
+                
+                # Copy file using scp
+                cmd = [
+                    "scp", "-o", "StrictHostKeyChecking=no", "-i", "/app/ssh-keys/id_rsa",
+                    source_file, f"{target_user}@{vm_ip}:{target_path}/{file_name}"
+                ]
+                
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                
+                if result.returncode == 0:
+                    log_template_message(deployment_id, f"File {file_name} deployed successfully to {vm}")
+                else:
+                    raise Exception(f"File deployment failed for {file_name}: {result.stderr}")
+                    
     except Exception as e:
         logger.error(f"File deployment step failed: {str(e)}")
         raise
 
 def execute_sql_deployment_step(deployment_id, step, inventory):
-    """Execute SQL deployment step by calling main app function"""
+    """Execute SQL deployment step"""
     try:
-        # Import the main app's SQL deployment function
-        from app import execute_sql_deployment
-        
         files = step.get("files", [])
         ft_number = step.get("ftNumber", "")
         db_connection = step.get("dbConnection", "")
@@ -428,48 +409,78 @@ def execute_sql_deployment_step(deployment_id, step, inventory):
         
         log_template_message(deployment_id, f"SQL deployment: {files} on connection {db_connection}")
         
-        # Use the main app's function
-        result = execute_sql_deployment(
-            ft=ft_number,
-            file=files[0] if files else "",
-            db_connection=db_connection,
-            db_user=db_user,
-            db_password=db_password
-        )
+        # Find database connection details
+        db_info = None
+        for conn in inventory.get("db_connections", []):
+            if conn.get("connection_name") == db_connection:
+                db_info = conn
+                break
         
-        if result.get('success'):
-            log_template_message(deployment_id, "SQL deployment completed successfully")
-        else:
-            raise Exception(result.get('error', 'SQL deployment failed'))
+        if not db_info:
+            raise Exception(f"Database connection {db_connection} not found")
+        
+        hostname = db_info.get("hostname", "localhost")
+        port = db_info.get("port", "5432")
+        
+        for file_name in files:
+            sql_file = os.path.join(FIX_FILES_DIR, ft_number, file_name)
             
+            if not os.path.exists(sql_file):
+                raise Exception(f"SQL file not found: {sql_file}")
+            
+            # Execute SQL file using psql
+            cmd = [
+                "psql", 
+                f"postgresql://{db_user}:{db_password}@{hostname}:{port}/postgres",
+                "-f", sql_file
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            
+            if result.stdout:
+                log_template_message(deployment_id, f"SQL OUTPUT: {result.stdout}")
+            
+            if result.returncode == 0:
+                log_template_message(deployment_id, f"SQL file {file_name} executed successfully")
+            else:
+                raise Exception(f"SQL execution failed for {file_name}: {result.stderr}")
+                
     except Exception as e:
         logger.error(f"SQL deployment step failed: {str(e)}")
         raise
 
 def execute_service_restart_step(deployment_id, step, inventory):
-    """Execute service restart step by calling main app function"""
+    """Execute service restart step"""
     try:
-        # Import the main app's systemctl function
-        from app import execute_ansible_systemctl
-        
         service = step.get("service", "docker")
         operation = step.get("operation", "restart")
         target_vms = step.get("targetVMs", ["batch1"])
         
         log_template_message(deployment_id, f"Service operation: {operation} {service} on {target_vms}")
         
-        # Use the main app's function
-        result = execute_ansible_systemctl(
-            vms=target_vms,
-            service=service,
-            operation=operation
-        )
-        
-        if result.get('success'):
-            log_template_message(deployment_id, f"Service {operation} completed successfully")
-        else:
-            raise Exception(result.get('error', f'Service {operation} failed'))
+        for vm in target_vms:
+            vm_ip = "10.172.145.204"  # Default IP for batch1
+            for vm_info in inventory.get("vms", []):
+                if vm_info.get("name") == vm:
+                    vm_ip = vm_info.get("ip", vm_ip)
+                    break
             
+            # Execute systemctl command
+            cmd = [
+                "ssh", "-o", "StrictHostKeyChecking=no", "-i", "/app/ssh-keys/id_rsa",
+                f"infadm@{vm_ip}", f"sudo systemctl {operation} {service}"
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            
+            if result.stdout:
+                log_template_message(deployment_id, f"SERVICE OUTPUT: {result.stdout}")
+            
+            if result.returncode == 0:
+                log_template_message(deployment_id, f"Service {operation} completed successfully on {vm}")
+            else:
+                raise Exception(f"Service {operation} failed on {vm}: {result.stderr}")
+                
     except Exception as e:
         logger.error(f"Service restart step failed: {str(e)}")
         raise
@@ -555,14 +566,11 @@ def get_template_deployment_logs(deployment_id):
     try:
         logger.debug(f"Looking for template deployment: {deployment_id}")
         
-        if not hasattr(current_app, 'template_deployments'):
-            current_app.template_deployments = {}
-        
-        if deployment_id not in current_app.template_deployments:
+        if deployment_id not in TEMPLATE_DEPLOYMENTS_STORAGE:
             logger.warning(f"Template deployment {deployment_id} not found")
             return jsonify({"error": "Template deployment not found"}), 404
         
-        deployment = current_app.template_deployments[deployment_id]
+        deployment = TEMPLATE_DEPLOYMENTS_STORAGE[deployment_id]
         logs = deployment.get('logs', [])
         
         logger.debug(f"Found template deployment {deployment_id} with {len(logs)} log entries")
@@ -584,11 +592,8 @@ def get_template_deployment_logs(deployment_id):
 def get_template_deployment_history():
     """Get template deployment history"""
     try:
-        if not hasattr(current_app, 'template_deployments'):
-            current_app.template_deployments = {}
-        
         deployment_list = []
-        for deployment_id, deployment in current_app.template_deployments.items():
+        for deployment_id, deployment in TEMPLATE_DEPLOYMENTS_STORAGE.items():
             deployment_list.append({
                 "id": deployment_id,
                 "template": deployment.get("template", ""),
