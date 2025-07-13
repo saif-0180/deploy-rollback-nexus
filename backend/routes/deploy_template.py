@@ -697,38 +697,38 @@ def execute_helm_upgrade_step(deployment_id, step, inventory):
 #             logger.error(f"Error loading template deployments: {e}")
 #             TEMPLATE_DEPLOYMENTS_STORAGE = {}
 
-def load_template_deployments():
-    """Load template deployments from file"""
-    global TEMPLATE_DEPLOYMENTS_STORAGE
+# def load_template_deployments():
+#     """Load template deployments from file"""
+#     global TEMPLATE_DEPLOYMENTS_STORAGE
     
-    logger.debug("=" * 50)
-    logger.debug("LOAD_TEMPLATE_DEPLOYMENTS CALLED")
-    logger.debug(f"Loading from: {TEMPLATE_HISTORY_FILE}")
+#     logger.debug("=" * 50)
+#     logger.debug("LOAD_TEMPLATE_DEPLOYMENTS CALLED")
+#     logger.debug(f"Loading from: {TEMPLATE_HISTORY_FILE}")
     
-    try:
-        if os.path.exists(TEMPLATE_HISTORY_FILE):
-            logger.debug("File exists, reading...")
-            with open(TEMPLATE_HISTORY_FILE, 'r') as f:
-                content = f.read().strip()
-                logger.debug(f"File content: '{content}'")
+#     try:
+#         if os.path.exists(TEMPLATE_HISTORY_FILE):
+#             logger.debug("File exists, reading...")
+#             with open(TEMPLATE_HISTORY_FILE, 'r') as f:
+#                 content = f.read().strip()
+#                 logger.debug(f"File content: '{content}'")
                 
-                if content:
-                    TEMPLATE_DEPLOYMENTS_STORAGE = json.loads(content)
-                    logger.info(f"Loaded {len(TEMPLATE_DEPLOYMENTS_STORAGE)} template deployments from file")
-                    logger.debug(f"Loaded deployment IDs: {list(TEMPLATE_DEPLOYMENTS_STORAGE.keys())}")
-                else:
-                    logger.debug("Deployment file is empty. Creating empty storage.")
-                    TEMPLATE_DEPLOYMENTS_STORAGE = {}
-        else:
-            logger.debug("File does not exist, starting with empty storage")
-            TEMPLATE_DEPLOYMENTS_STORAGE = {}
+#                 if content:
+#                     TEMPLATE_DEPLOYMENTS_STORAGE = json.loads(content)
+#                     logger.info(f"Loaded {len(TEMPLATE_DEPLOYMENTS_STORAGE)} template deployments from file")
+#                     logger.debug(f"Loaded deployment IDs: {list(TEMPLATE_DEPLOYMENTS_STORAGE.keys())}")
+#                 else:
+#                     logger.debug("Deployment file is empty. Creating empty storage.")
+#                     TEMPLATE_DEPLOYMENTS_STORAGE = {}
+#         else:
+#             logger.debug("File does not exist, starting with empty storage")
+#             TEMPLATE_DEPLOYMENTS_STORAGE = {}
             
-        logger.debug("=" * 50)
+#         logger.debug("=" * 50)
         
-    except Exception as e:
-        logger.error(f"Error loading template deployments: {e}")
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        TEMPLATE_DEPLOYMENTS_STORAGE = {}
+#     except Exception as e:
+#         logger.error(f"Error loading template deployments: {e}")
+#         logger.error(f"Full traceback: {traceback.format_exc()}")
+#         TEMPLATE_DEPLOYMENTS_STORAGE = {}
 
 # def save_template_deployments():
 #     """Save template deployments to file atomically"""
@@ -798,77 +798,77 @@ def load_template_deployments():
 #             logger.error(f"Error saving template deployments: {e}")
 #             raise
 
-def save_template_deployments():
-    """Save template deployments to file with extensive debugging"""
-    logger.debug("=" * 50)
-    logger.debug("SAVE_TEMPLATE_DEPLOYMENTS CALLED")
-    logger.debug(f"Current storage contents: {TEMPLATE_DEPLOYMENTS_STORAGE}")
-    logger.debug(f"Storage size: {len(TEMPLATE_DEPLOYMENTS_STORAGE)}")
-    logger.debug(f"Target file: {TEMPLATE_HISTORY_FILE}")
+# def save_template_deployments():
+#     """Save template deployments to file with extensive debugging"""
+#     logger.debug("=" * 50)
+#     logger.debug("SAVE_TEMPLATE_DEPLOYMENTS CALLED")
+#     logger.debug(f"Current storage contents: {TEMPLATE_DEPLOYMENTS_STORAGE}")
+#     logger.debug(f"Storage size: {len(TEMPLATE_DEPLOYMENTS_STORAGE)}")
+#     logger.debug(f"Target file: {TEMPLATE_HISTORY_FILE}")
     
-    try:
-        # Check if directory exists
-        directory = os.path.dirname(TEMPLATE_HISTORY_FILE)
-        if not os.path.exists(directory):
-            logger.error(f"Directory does not exist: {directory}")
-            os.makedirs(directory, exist_ok=True)
-            logger.info(f"Created directory: {directory}")
+#     try:
+#         # Check if directory exists
+#         directory = os.path.dirname(TEMPLATE_HISTORY_FILE)
+#         if not os.path.exists(directory):
+#             logger.error(f"Directory does not exist: {directory}")
+#             os.makedirs(directory, exist_ok=True)
+#             logger.info(f"Created directory: {directory}")
         
-        # Check permissions
-        if not test_file_permissions():
-            logger.error("Cannot write to template logs directory!")
-            return False
+#         # Check permissions
+#         if not test_file_permissions():
+#             logger.error("Cannot write to template logs directory!")
+#             return False
         
-        # Create the JSON content
-        json_content = json.dumps(TEMPLATE_DEPLOYMENTS_STORAGE, indent=2, default=str)
-        logger.debug(f"JSON content to save: {json_content}")
+#         # Create the JSON content
+#         json_content = json.dumps(TEMPLATE_DEPLOYMENTS_STORAGE, indent=2, default=str)
+#         logger.debug(f"JSON content to save: {json_content}")
         
-        # Write to file
-        # with open(TEMPLATE_HISTORY_FILE, 'w') as f:
-        #     f.write(json_content)
-        with open(TEMPLATE_HISTORY_FILE, 'w') as f:
-            f.write(json_content)
-            f.flush()             # ✅ force flush buffer to file
-            os.fsync(f.fileno())  # ✅ force sync file to disk (especially for Docker volumes)
+#         # Write to file
+#         # with open(TEMPLATE_HISTORY_FILE, 'w') as f:
+#         #     f.write(json_content)
+#         with open(TEMPLATE_HISTORY_FILE, 'w') as f:
+#             f.write(json_content)
+#             f.flush()             # ✅ force flush buffer to file
+#             os.fsync(f.fileno())  # ✅ force sync file to disk (especially for Docker volumes)
                 
-        logger.debug("File write completed")
+#         logger.debug("File write completed")
 
-        with open(TEMPLATE_HISTORY_FILE, 'r') as f:
-            verify_content = f.read().strip()
-            if not verify_content:
-                logger.critical("File was written but is empty. Aborting.")
-            else:
-                logger.debug("File written and verified successfully.")
+#         with open(TEMPLATE_HISTORY_FILE, 'r') as f:
+#             verify_content = f.read().strip()
+#             if not verify_content:
+#                 logger.critical("File was written but is empty. Aborting.")
+#             else:
+#                 logger.debug("File written and verified successfully.")
         
-        # Verify the save immediately
-        if os.path.exists(TEMPLATE_HISTORY_FILE):
-            file_size = os.path.getsize(TEMPLATE_HISTORY_FILE)
-            logger.debug(f"File exists, size: {file_size} bytes")
+#         # Verify the save immediately
+#         if os.path.exists(TEMPLATE_HISTORY_FILE):
+#             file_size = os.path.getsize(TEMPLATE_HISTORY_FILE)
+#             logger.debug(f"File exists, size: {file_size} bytes")
             
-            with open(TEMPLATE_HISTORY_FILE, 'r') as f:
-                saved_content = f.read()
-                logger.debug(f"File content: {saved_content}")
+#             with open(TEMPLATE_HISTORY_FILE, 'r') as f:
+#                 saved_content = f.read()
+#                 logger.debug(f"File content: {saved_content}")
                 
-                if saved_content.strip():
-                    saved_data = json.loads(saved_content)
-                    logger.debug(f"Verification: File contains {len(saved_data)} deployments")
-                    logger.debug(f"Verification: Deployment IDs in file: {list(saved_data.keys())}")
+#                 if saved_content.strip():
+#                     saved_data = json.loads(saved_content)
+#                     logger.debug(f"Verification: File contains {len(saved_data)} deployments")
+#                     logger.debug(f"Verification: Deployment IDs in file: {list(saved_data.keys())}")
                     
-                    # Check if our specific deployment is there
-                    for dep_id, dep_data in saved_data.items():
-                        logger.debug(f"Saved deployment {dep_id}: {dep_data}")
-                else:
-                    logger.error("CRITICAL: File is empty after save!")
-        else:
-            logger.error("CRITICAL: File does not exist after save!")
+#                     # Check if our specific deployment is there
+#                     for dep_id, dep_data in saved_data.items():
+#                         logger.debug(f"Saved deployment {dep_id}: {dep_data}")
+#                 else:
+#                     logger.error("CRITICAL: File is empty after save!")
+#         else:
+#             logger.error("CRITICAL: File does not exist after save!")
             
-        logger.debug("=" * 50)
-        return True
+#         logger.debug("=" * 50)
+#         return True
         
-    except Exception as e:
-        logger.error(f"CRITICAL ERROR in save_template_deployments: {e}")
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        return False
+#     except Exception as e:
+#         logger.error(f"CRITICAL ERROR in save_template_deployments: {e}")
+#         logger.error(f"Full traceback: {traceback.format_exc()}")
+#         return False
 
 # def log_template_message(deployment_id, message):
 #     """Log message for template deployments"""
