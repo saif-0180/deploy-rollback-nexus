@@ -368,7 +368,7 @@ def deploy_template():
         logger.info(f"Generated deployment ID: {deployment_id}")
         
         # Prepare deployment data
-        deployment_data = {
+        deployment_data[deployment_id]= {
             "id": deployment_id,
             "template": template_name,
             "ft_number": ft_number,
