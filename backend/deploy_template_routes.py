@@ -137,6 +137,10 @@ def execute_template():
         # Get user info (you'll need to implement this based on your auth system)
         logged_in_user = "system"  # Replace with actual user from session/token
         
+        # Initialize deployments dict if it doesn't exist
+        if not hasattr(current_app, 'deployments'):
+            current_app.deployments = {}
+        
         # Create deployment entry
         deployment_entry = {
             'id': deployment_id,
@@ -171,6 +175,10 @@ def execute_template():
 def execute_template_steps(deployment_id, template):
     """Execute template steps in order"""
     try:
+        # Initialize deployments dict if it doesn't exist
+        if not hasattr(current_app, 'deployments'):
+            current_app.deployments = {}
+            
         deployment = current_app.deployments.get(deployment_id)
         if not deployment:
             logger.error(f"Deployment {deployment_id} not found")
@@ -213,14 +221,23 @@ def execute_template_steps(deployment_id, template):
         
     except Exception as e:
         logger.error(f"Error executing template steps for {deployment_id}: {e}")
-        if deployment_id in current_app.deployments:
+        if hasattr(current_app, 'deployments') and deployment_id in current_app.deployments:
             current_app.deployments[deployment_id]['status'] = 'failed'
             current_app.deployments[deployment_id]['logs'].append(f"Template execution failed: {str(e)}")
 
 def execute_single_step(step, inventory, db_inventory, deployment_id):
     """Execute a single template step"""
     step_type = step.get('type')
+    
+    # Initialize deployments dict if it doesn't exist
+    if not hasattr(current_app, 'deployments'):
+        current_app.deployments = {}
+        
     deployment = current_app.deployments.get(deployment_id)
+    
+    if not deployment:
+        logger.error(f"Deployment {deployment_id} not found")
+        return False
     
     try:
         if step_type == 'file_deployment':
@@ -241,6 +258,8 @@ def execute_single_step(step, inventory, db_inventory, deployment_id):
         logger.error(f"Error executing step {step_type}: {e}")
         deployment['logs'].append(f"Error executing {step_type}: {str(e)}")
         return False
+
+# ... keep existing code (all the execute_*_step functions remain the same)
 
 def execute_file_deployment_step(step, inventory, deployment):
     """Execute file deployment step using ansible"""
@@ -282,6 +301,7 @@ def execute_file_deployment_step(step, inventory, deployment):
                     '--become'
                 ]
                 
+                # Use the helper method from current_app
                 result = current_app.run_ansible_command(ansible_command, deployment['logs'])
                 if not result:
                     return False
