@@ -49,6 +49,7 @@ const DeployTemplate: React.FC = () => {
   const [deploymentLogs, setDeploymentLogs] = useState<string[]>([]);
   const [logStatus, setLogStatus] = useState<'idle' | 'loading' | 'running' | 'success' | 'failed' | 'completed'>('idle');
   const [currentDeploymentId, setCurrentDeploymentId] = useState<string | null>(null);
+  const [eventSource, setEventSource] = useState<EventSource | null>(null);
 
   // Fetch available templates
   const { 
@@ -125,8 +126,8 @@ const DeployTemplate: React.FC = () => {
         title: "Deployment Started",
         description: `Template deployment started with ID: ${data.deployment_id}`,
       });
-      // Start polling for logs
-      pollForLogs(data.deployment_id);
+      // Start EventSource for real-time logs
+      startLogStream(data.deployment_id);
     },
     onError: (error) => {
       toast({
@@ -137,43 +138,55 @@ const DeployTemplate: React.FC = () => {
     },
   });
 
-  // Function to poll for logs
-  const pollForLogs = async (deploymentId: string) => {
-    const pollInterval = setInterval(async () => {
+  // Function to start EventSource log streaming
+  const startLogStream = (deploymentId: string) => {
+    // Close existing EventSource if any
+    if (eventSource) {
+      eventSource.close();
+    }
+
+    console.log(`Starting EventSource for deployment: ${deploymentId}`);
+    const newEventSource = new EventSource(`/api/logs/${deploymentId}`);
+    
+    newEventSource.onmessage = (event) => {
       try {
-        console.log(`Polling logs for deployment: ${deploymentId}`);
-        const response = await fetch(`/api/deploy/${deploymentId}/logs`);
-        if (!response.ok) {
-          clearInterval(pollInterval);
-          return;
+        const data = JSON.parse(event.data);
+        console.log(`Received log data for ${deploymentId}:`, data);
+        
+        if (data.logs) {
+          setDeploymentLogs(data.logs);
         }
         
-        const data = await response.json();
-        console.log(`Received logs for ${deploymentId}:`, data);
-        
-        setDeploymentLogs(data.logs || []);
-        
-        if (data.status === 'success' || data.status === 'failed') {
+        if (data.status && (data.status === 'success' || data.status === 'failed')) {
           setLogStatus(data.status);
-          clearInterval(pollInterval);
+          newEventSource.close();
+          setEventSource(null);
           // Refresh deployment history
           queryClient.invalidateQueries({ queryKey: ['deployment-history'] });
         }
       } catch (error) {
-        console.error('Error polling logs:', error);
-        clearInterval(pollInterval);
-        setLogStatus('failed');
+        console.error('Error parsing log data:', error);
       }
-    }, 2000);
+    };
 
-    // Clean up interval after 10 minutes
-    setTimeout(() => {
-      clearInterval(pollInterval);
-      if (logStatus === 'running') {
-        setLogStatus('completed');
-      }
-    }, 600000);
+    newEventSource.onerror = (error) => {
+      console.error('EventSource error:', error);
+      setLogStatus('failed');
+      newEventSource.close();
+      setEventSource(null);
+    };
+
+    setEventSource(newEventSource);
   };
+
+  // Cleanup EventSource on component unmount
+  useEffect(() => {
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [eventSource]);
 
   const handleLoadTemplate = () => {
     if (selectedTemplate) {
