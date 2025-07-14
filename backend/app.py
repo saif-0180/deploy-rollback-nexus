@@ -818,11 +818,8 @@ def execute_template():
         # Generate deployment ID
         deployment_id = str(uuid.uuid4())
         
-        # Initialize deployment tracking
-        if not hasattr(app, 'deployments'):
-            app.deployments = {}
         
-        app.deployments[deployment_id] = {
+        deployments[deployment_id] = {
             'type': 'template_deployment',
             'status': 'running',
             'logs': [],
@@ -832,7 +829,7 @@ def execute_template():
             'steps_total': len(template_data.get('steps', [])),
             'steps_completed': 0
         }
-        
+        save_deployment_history()
         deploy_template_logger.info(f"Starting template deployment {deployment_id} for {template_name}")
         
         # Execute template in background thread
@@ -895,7 +892,7 @@ def execute_template():
             'status': 'started',
             'template_name': template_name
         })
-        
+        save_deployment_history()
     except Exception as e:
         deploy_template_logger.error(f"Error executing template: {str(e)}")
         return jsonify({'error': str(e)}), 500
