@@ -138,6 +138,9 @@ except (FileNotFoundError, json.JSONDecodeError) as e:
     inventory = {"vms": [], "users": [], "systemd_services": []}
     # Don't save the empty inventory - let user create it manually
 
+# Function to save deployment history with backup
+
+
 def save_deployment_history():
     try:
         logger.info(f"Starting to save deployment history. Current deployments count: {len(deployments)}")
@@ -210,79 +213,6 @@ def log_message(deployment_id, message):
         # Also log to application log
         logger.debug(f"[{deployment_id}] {message}")
 
-# Function to save deployment history with backup
-
-# def save_deployment_history():
-#     try:
-#         logger.info(f"Starting to save deployment history. Current deployments count: {len(deployments)}")
-        
-#         # Ensure the deployment logs directory exists
-#         try:
-#             os.makedirs(DEPLOYMENT_LOGS_DIR, exist_ok=True)
-#             logger.debug(f"Ensured directory exists: {DEPLOYMENT_LOGS_DIR}")
-#         except Exception as e:
-#             logger.error(f"Failed to create DEPLOYMENT_LOGS_DIR: {e}")
-#             raise
-        
-#         # Create a backup of the current history file if it exists
-#         if os.path.exists(DEPLOYMENT_HISTORY_FILE):
-#             # timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-#             timestamp = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
-#             backup_file = os.path.join(DEPLOYMENT_LOGS_DIR, f'deployment_history_{timestamp}.json')
-#             try:
-#                 with open(DEPLOYMENT_HISTORY_FILE, 'r') as src:
-#                     with open(backup_file, 'w') as dst:
-#                         dst.write(src.read())
-#                 logger.debug(f"Created backup of deployment history: {backup_file}")
-#             except Exception as e:
-#                 logger.error(f"Error creating backup of history file: {str(e)}")
-#                 # Don't raise here, continue with saving
-        
-#         # Ensure the directory for the main history file exists
-#         history_dir = os.path.dirname(DEPLOYMENT_HISTORY_FILE)
-#         if history_dir:
-#             os.makedirs(history_dir, exist_ok=True)
-        
-#         # Save the current deployment history
-#         try:
-#             with open(DEPLOYMENT_HISTORY_FILE, 'w') as f:
-#                 json.dump(deployments, f, default=str, indent=2)
-#             logger.info(f"Saved {len(deployments)} deployments to history file: {DEPLOYMENT_HISTORY_FILE}")
-#         except Exception as e:
-#             logger.error(f"Failed to write deployment history file: {e}")
-#             raise
-        
-#         # Clean up old backup files (keep only last 10)
-#         try:
-#             backup_files = sorted(glob.glob(os.path.join(DEPLOYMENT_LOGS_DIR, 'deployment_history_*.json')))
-#             if len(backup_files) > 10:
-#                 for old_file in backup_files[:-10]:
-#                     try:
-#                         os.remove(old_file)
-#                         logger.debug(f"Removed old backup file: {old_file}")
-#                     except Exception as e:
-#                         logger.error(f"Error removing old backup file {old_file}: {str(e)}")
-#         except Exception as e:
-#             logger.error(f"Error during backup cleanup: {e}")
-#             # Don't raise here, the main save was successful
-            
-#     except Exception as e:
-#         logger.error(f"Failed to save deployment history: {str(e)}")
-#         raise  # Re-raise so the API returns 500
-
-
-
-# # Helper function to log message to deployment log
-# def log_message(deployment_id, message):
-#     """Log a message to the deployment logs and the application log"""
-#     if deployment_id in deployments:
-#         # Add to deployment logs
-#         if "logs" not in deployments[deployment_id]:
-#             deployments[deployment_id]["logs"] = []
-#         deployments[deployment_id]["logs"].append(message)
-        
-#         # Also log to application log
-#         logger.debug(f"[{deployment_id}] {message}")
 
 # Check SSH key permissions and setup
 def check_ssh_setup():
@@ -429,78 +359,7 @@ def get_systemd_services():
 
 # # New APIs for template generator and Oneclick deploy using template
 
-# @app.route('/api/deploy/template', methods=['POST'])
-# def deploy_template_route():
-#     """Deploy a template with multiple steps"""
-#     # Get current authenticated user
-#     # current_user = get_current_user()
-#     # if not current_user:
-#     #     return jsonify({"error": "Authentication required"}), 401
-
-#     data = request.json
-#     template_name = data.get('template')
-
-#     if not template_name:
-#         return jsonify({"error": "Template name is required"}), 400
-
-#     logger.info(f"Template deployment request received from {current_user['username']}: {template_name}")
-
-#     try:
-#         result, status_code = deploy_template(template_name, current_user)
-#         return jsonify(result), status_code
-#     except Exception as e:
-#         logger.error(f"Template deployment error: {str(e)}")
-#         return jsonify({"error": str(e)}), 500
-
-# @app.route('/api/templates', methods=['GET'])
-# def list_templates():
-#     """List available deployment templates"""
-#     # current_user = get_current_user()
-#     # if not current_user:
-#     #     return jsonify({"error": "Authentication required"}), 401
-
-#     try:
-#         templates = []
-#         if os.path.exists(TEMPLATE_DIR):
-#             for file_name in os.listdir(TEMPLATE_DIR):
-#                 if file_name.endswith('.json'):
-#                     try:
-#                         template = load_template(file_name)
-#                         templates.append({
-#                             "name": file_name,
-#                             "description": template.get('metadata', {}).get('description', ''),
-#                             "ft_number": template.get('metadata', {}).get('ft_number', ''),
-#                             "total_steps": template.get('metadata', {}).get('total_steps', len(template.get('steps', []))),
-#                             "steps": [
-#                                 {
-#                                     "order": step.get('order'),
-#                                     "type": step.get('type'),
-#                                     "description": step.get('description', '')
-#                                 } for step in template.get('steps', [])
-#                             ]
-#                         })
-#                     except Exception as e:
-#                         logger.warning(f"Failed to load template {file_name}: {str(e)}")
-#                         continue
-
-#         return jsonify({"templates": templates})
-#     except Exception as e:
-#         logger.error(f"Failed to list templates: {str(e)}")
-#         return jsonify({"error": str(e)}), 500
-
-# @app.route('/api/template/<template_name>', methods=['GET'])
-# def get_template_details(template_name):
-#     """Get details of a specific template"""
-#     # current_user = get_current_user()
-#     # if not current_user:
-#     #     return jsonify({"error": "Authentication required"}), 401
-
-#     try:
-#         template = load_template(template_name)
-#         return jsonify(template)
-#     except Exception as e:
-#         logger.error(f"Failed to get template details: {str(e)}")
-#         return jsonify({"error": str(e)}), 500
+# placehorlder
 
 
 # # End of template generator and onclick deploy using template

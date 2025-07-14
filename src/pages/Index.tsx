@@ -9,7 +9,6 @@ import Header from "@/components/Header";
 import { useAuth } from "@/contexts/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import TemplateGenerator from "@/components/TemplateGenerator";
-import DeployUsingTemplate from "@/components/DeployUsingTemplate";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,9 +44,6 @@ const Index = () => {
               <TabsTrigger value="template-generator" className="data-[state=active]:bg-[#F79B72] data-[state=active]:text-[#2A4759] text-[#EEEEEE]">
                 Template Generator
               </TabsTrigger>
-              <TabsTrigger value="deploy-template" className="data-[state=active]:bg-[#F79B72] data-[state=active]:text-[#2A4759] text-[#EEEEEE]">
-                Deploy using Template
-              </TabsTrigger>
               <TabsTrigger value="history" className="data-[state=active]:bg-[#F79B72] data-[state=active]:text-[#2A4759] text-[#EEEEEE]">
                 Deployment History
               </TabsTrigger>
@@ -73,11 +69,7 @@ const Index = () => {
             <TabsContent value="template-generator" className="p-6 bg-[#1a2b42] rounded-md shadow-lg">
               <TemplateGenerator />
             </TabsContent>
-            
-            <TabsContent value="deploy-template" className="p-6 bg-[#1a2b42] rounded-md shadow-lg">
-              <DeployUsingTemplate />
-            </TabsContent>
-            
+                      
             <TabsContent value="history" className="p-6 bg-[#1a2b42] rounded-md shadow-lg">
               <DeploymentHistory />
             </TabsContent>
