@@ -1,3 +1,4 @@
+
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/toaster";
 import FileOperations from "@/components/FileOperations";
@@ -9,6 +10,7 @@ import Header from "@/components/Header";
 import { useAuth } from "@/contexts/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import TemplateGenerator from "@/components/TemplateGenerator";
+import DeployTemplate from "@/components/DeployTemplate";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,7 +33,7 @@ const Index = () => {
         
         <main className="container mx-auto px-4 py-6">
           <Tabs defaultValue="file" className="w-full">
-            <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-7' : 'grid-cols-6'} bg-[#2A4759] mb-6`}>
+            <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-8' : 'grid-cols-7'} bg-[#2A4759] mb-6`}>
               <TabsTrigger value="file" className="data-[state=active]:bg-[#F79B72] data-[state=active]:text-[#2A4759] text-[#EEEEEE]">
                 File Operations
               </TabsTrigger>
@@ -40,6 +42,9 @@ const Index = () => {
               </TabsTrigger>
               <TabsTrigger value="systemctl" className="data-[state=active]:bg-[#F79B72] data-[state=active]:text-[#2A4759] text-[#EEEEEE]">
                 Systemctl Operations
+              </TabsTrigger>
+              <TabsTrigger value="deploy-template" className="data-[state=active]:bg-[#F79B72] data-[state=active]:text-[#2A4759] text-[#EEEEEE]">
+                Deploy Template
               </TabsTrigger>
               <TabsTrigger value="template-generator" className="data-[state=active]:bg-[#F79B72] data-[state=active]:text-[#2A4759] text-[#EEEEEE]">
                 Template Generator
@@ -64,6 +69,10 @@ const Index = () => {
             
             <TabsContent value="systemctl" className="p-6 bg-[#1a2b42] rounded-md shadow-lg">
               <SystemctlOperations />
+            </TabsContent>
+            
+            <TabsContent value="deploy-template" className="p-6 bg-[#1a2b42] rounded-md shadow-lg">
+              <DeployTemplate />
             </TabsContent>
             
             <TabsContent value="template-generator" className="p-6 bg-[#1a2b42] rounded-md shadow-lg">
