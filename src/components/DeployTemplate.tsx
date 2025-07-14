@@ -138,19 +138,19 @@ const DeployTemplate: React.FC = () => {
   });
 
   // Function to start EventSource log streaming
-  const startLogStream = (deploymentId: string) => {
+  const startLogStream = (id: string) => {
     // Close existing EventSource if any
     if (eventSource) {
       eventSource.close();
     }
 
-    console.log(`Starting EventSource for deployment: ${deploymentId}`);
+    console.log(`Starting EventSource for deployment: ${id}`);
     
     // First, check if the logs endpoint exists and is ready
     const checkEndpoint = async () => {
       try {
         // Try to get initial logs first
-        const response = await fetch(`/api/logs/${deploymentId}`);
+        const response = await fetch(`/api/deploy/${id}/logs`);
         
         if (!response.ok) {
           throw new Error(`Logs endpoint not available: ${response.status}`);
@@ -171,17 +171,17 @@ const DeployTemplate: React.FC = () => {
         }
         
         // Start EventSource for real-time updates
-        const newEventSource = new EventSource(`/api/logs/${deploymentId}`);
+        const newEventSource = new EventSource(`/api/deploy/${id}/logs`);
         
         newEventSource.onopen = () => {
-          console.log(`EventSource connection opened for deployment: ${deploymentId}`);
+          console.log(`EventSource connection opened for deployment: ${id}`);
           setLogStatus('running');
         };
         
         newEventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log(`Received log data for ${deploymentId}:`, data);
+            console.log(`Received log data for ${id}:`, data);
             
             // Handle individual log messages
             if (data.message) {
@@ -257,7 +257,7 @@ const DeployTemplate: React.FC = () => {
         });
         
         // Fallback to polling
-        startLogPolling(deploymentId);
+        startLogPolling(id);
       }
     };
 
@@ -266,12 +266,12 @@ const DeployTemplate: React.FC = () => {
   };
 
   // Fallback polling method if EventSource fails
-  const startLogPolling = (deploymentId: string) => {
+  const startLogPolling = (id: string) => {
     let polling = true;
     
     const pollLogs = async () => {
       try {
-        const response = await fetch(`/api/logs/${deploymentId}`);
+        const response = await fetch(`/api/deploy/${id}/logs`);
         if (response.ok) {
           const data = await response.json();
           
