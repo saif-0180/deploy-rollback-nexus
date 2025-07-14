@@ -20,7 +20,6 @@ from routes.auth_routes import get_current_user
 # Import DB routes
 from routes.db_routes import db_routes
 from routes.template_routes import template_bp
-from routes.deploy_template import deploy_template_bp
 # Register the blueprint
 #app.register_blueprint(db_blueprint, url_prefix='/api')
 
@@ -32,7 +31,6 @@ app = Flask(__name__, static_folder='../frontend/dist')
 app.register_blueprint(db_routes)
 app.register_blueprint(auth_bp)
 app.register_blueprint(template_bp)
-app.register_blueprint(deploy_template_bp)
 #app.register_blueprint(db_routes)
 
 
