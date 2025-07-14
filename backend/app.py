@@ -172,8 +172,6 @@ def save_deployment_history():
         # Save the current deployment history
         try:
             with open(DEPLOYMENT_HISTORY_FILE, 'w') as f:
-                content = verify.read().strip()
-                logger.debug(f"Post-write file check. Length: {len(content)}. Content preview: {content[:150]}")
                 json.dump(deployments, f, default=str, indent=2)
             logger.info(f"Saved {len(deployments)} deployments to history file: {DEPLOYMENT_HISTORY_FILE}")
         except Exception as e:
